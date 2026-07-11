@@ -1,0 +1,43 @@
+[project]
+name = "compute-tycoon"
+version = "0.1.0"
+requires-python = ">=3.14"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+extend-exclude = [
+    ".venv",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hardware_sim", "hardware"]
+
+[tool.mypy]
+python_version = "3.14"
+files = [
+    "main.py",
+    "hardware.py",
+    "hardware_sim",
+]
+ignore_missing_imports = true
+pretty = true
+show_error_codes = true
+warn_unused_configs = true
+disable_error_code = [
+    "arg-type",
+    "attr-defined",
+    "call-overload",
+    "index",
+    "var-annotated",
+]

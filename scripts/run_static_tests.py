@@ -31,7 +31,11 @@ CHECKS: tuple[tuple[str, Sequence[str]], ...] = (
             "hardware_sim",
         ),
     ),
-    ("pytest", (sys.executable, "-m", "pytest")),
+    (
+        "pytest with coverage",
+        (sys.executable, "-m", "coverage", "run", "-m", "pytest"),
+    ),
+    ("coverage report", (sys.executable, "-m", "coverage", "report")),
 )
 
 

@@ -45,3 +45,17 @@ disable_error_code = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers --strict-config -p no:cacheprovider"
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+
+[tool.coverage.report]
+include = [
+    "hardware_sim/*",
+    "main.py",
+    "hardware.py",
+]
+show_missing = true
+fail_under = 40.0
+precision = 1

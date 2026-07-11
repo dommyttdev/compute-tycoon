@@ -3,6 +3,10 @@
 Track issues and PRDs in GitHub Issues for `dommyttdev/compute-tycoon`.
 Use `gh` from this repository so it infers the remote automatically.
 
+Always use the local `gh issue` CLI directly for issue creation, reads, updates,
+comments, and closure. Do not attempt GitHub connector or MCP issue tools before
+`gh issue`.
+
 ## Operations
 
 - Create: `gh issue create`

@@ -15,6 +15,7 @@ CHECKS: tuple[tuple[str, Sequence[str]], ...] = (
             "main.py",
             "hardware.py",
             "hardware_sim",
+            "tests",
         ),
     ),
     ("ruff check", (sys.executable, "-m", "ruff", "check", ".")),
@@ -30,6 +31,7 @@ CHECKS: tuple[tuple[str, Sequence[str]], ...] = (
             "hardware_sim",
         ),
     ),
+    ("pytest", (sys.executable, "-m", "pytest")),
 )
 
 

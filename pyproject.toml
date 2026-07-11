@@ -41,3 +41,7 @@ disable_error_code = [
     "index",
     "var-annotated",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config -p no:cacheprovider"

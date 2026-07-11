@@ -36,9 +36,10 @@ Follow `docs/agents/git-branches.md`.
   commit, stash, or push changes; or otherwise alter the Git index or history.
 - With a dirty worktree, do not create or switch branches. Stop if the current
   branch is not appropriate for the task.
-- Root needs no extra permission to prepare a branch. After one designated
-  approver accepts the reviewed diff, root may commit, push, create or update the
-  PR, submit its review, merge, and delete the branch. See the approval rules.
+- Root needs no extra permission to prepare a branch. After the user instructs
+  the work, root may commit, push, and open the PR. After one designated approver
+  accepts the complete PR diff, root may record the review, merge, and delete the
+  branch. See the approval rules.
 
 ## Agent skills
 

@@ -3,6 +3,11 @@
 Keep agent-only instructions concise and in English to minimize context usage.
 Human-facing documentation may use Japanese.
 
+## Encoding
+
+- When reading Japanese text in PowerShell, set console output to UTF-8 and use
+  `Get-Content -Encoding UTF8`; do not rely on the session default encoding.
+
 ## Commits
 
 Follow the commit rules in `CONTRIBUTING.md`.
@@ -12,6 +17,12 @@ Follow the commit rules in `CONTRIBUTING.md`.
 - Write the subject and body in Japanese.
 - Use `docs`, not `doc`, for documentation changes.
 - Do not commit unless the user explicitly asks.
+- A user instruction to perform work authorizes the complete delivery workflow:
+  implement, verify, commit, push, open a PR, obtain the required review, merge,
+  and delete the task branch. Do not pause for separate approval at each step.
+- Stop before completion only for a real blocker such as ambiguous scope,
+  unrelated worktree changes, merge conflicts, failing required checks, missing
+  credentials or permissions, or review changes that require user direction.
 
 ## Branches
 
@@ -25,9 +36,10 @@ Follow `docs/agents/git-branches.md`.
   commit, stash, or push changes; or otherwise alter the Git index or history.
 - With a dirty worktree, do not create or switch branches. Stop if the current
   branch is not appropriate for the task.
-- Root needs no extra permission to prepare a branch. After one designated
-  approver accepts the reviewed diff, root may commit, push, create or update the
-  PR, submit its review, merge, and delete the branch. See the approval rules.
+- Root needs no extra permission to prepare a branch. After the user instructs
+  the work, root may commit, push, and open the PR. After one designated approver
+  accepts the complete PR diff, root may record the review, merge, and delete the
+  branch. See the approval rules.
 
 ## Agent skills
 

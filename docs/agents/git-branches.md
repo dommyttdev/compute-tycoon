@@ -10,7 +10,8 @@ protecting user work and keeping shared-worktree coordination predictable.
 The root agent exclusively owns branch operations, the Git index, commits, and
 history. Subagents edit only their assigned files and report changes to root.
 Root may create or switch branches as normal task preparation without extra user
-authorization. One approval covers the reviewed change through branch cleanup.
+authorization. A user instruction to perform work authorizes the complete
+delivery workflow through branch cleanup.
 
 ## Approval
 
@@ -19,16 +20,15 @@ manager instead when the change affects requirements, architecture, security,
 persistence compatibility, release risk, or when QA cannot decide. Do not request
 both unless the user explicitly requires dual approval.
 
-The approver reviews the complete diff and relevant verification, then reports
-`OK` with the branch name and reviewed worktree fingerprint or commit SHA. That
-approval authorizes root to commit, push, create or update the PR, submit the PR
-review, merge after required checks pass, and delete the branch. Explicit user
-authorization may replace agent approval.
+The approver reviews the complete PR diff and relevant verification, then reports
+`OK` with the branch name and reviewed commit SHA. Root records or submits that
+review when the hosting platform permits, merges after required checks pass, and
+deletes the branch. Explicit user authorization may replace agent approval.
 
 Any content change after approval invalidates it. Reverification that does not
 change tracked content does not. Root must obtain one new approval for the updated
-diff; the same approver may issue it. An approval never applies to another branch,
-PR, or change.
+PR diff; the same approver may issue it. An approval never applies to another
+branch, PR, or change.
 
 ## Naming
 
@@ -50,11 +50,16 @@ Examples: `feat/123-network-bandwidth`, `fix/storage-rounding`, and
    When already on the appropriate task branch, continue without creating or
    switching branches.
 3. Subagents perform bounded work; root integrates and verifies the diff.
-4. QA approves normal changes; the manager approves high-risk or exceptional
-   changes. Only one of them reviews the change.
-5. After approval, root performs the authorized Git and PR operations without
-   requesting approval again at each stage.
-6. Root merges only after required checks pass, then deletes the branch when safe.
+4. Root commits, pushes, and opens a ready-for-review PR.
+5. QA reviews normal changes; the manager reviews high-risk or exceptional
+   changes. Only one of them reviews the complete PR diff.
+6. Root addresses review feedback and obtains a fresh review after content changes.
+7. Root merges after required checks pass, then deletes the branch when safe.
+
+Do not pause between these steps for separate user approval. Stop only when safe
+completion requires user direction or an external blocker cannot be resolved,
+including ambiguous scope, unrelated worktree changes, merge conflicts, failing
+required checks, or missing credentials or permissions.
 
 With a dirty worktree, do not create or switch branches. Continue only when the
 current branch is appropriate for the same task; otherwise stop. Never stash,
@@ -85,7 +90,7 @@ discard, overwrite, or mix changes to make preparation possible.
 - Subagent branch, index, commit, stash, merge, rebase, push, or history changes.
 - Unauthorized stash, reset, discard, overwrite, force-push, or history rewrite.
 - Accumulating unrelated tasks on one branch.
-- Acting on missing, ambiguous, stale, or out-of-scope approval.
+- Acting on missing, ambiguous, stale, or out-of-scope review approval.
 - Requesting both QA and manager approval by default.
-- Treating branch creation or switching as approval to commit, push, open a PR,
-  review, merge, or delete a branch.
+- Treating branch creation or switching alone as authorization for delivery when
+  the user has not instructed the agent to perform the work.

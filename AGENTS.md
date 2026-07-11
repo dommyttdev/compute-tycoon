@@ -46,6 +46,8 @@ Follow `docs/agents/git-branches.md`.
 ### Issue tracker
 
 Track work in GitHub Issues. See `docs/agents/issue-tracker.md`.
+Always use the local `gh issue` CLI for GitHub Issue operations. Do not try a
+GitHub connector or MCP issue tool first.
 
 ### Triage labels
 

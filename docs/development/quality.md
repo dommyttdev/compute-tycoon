@@ -9,7 +9,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-## 静的検査
+## 品質チェック
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\run_static_tests.py
@@ -21,6 +21,7 @@ python -m venv .venv
 2. `ruff check`: Lintとimport順序
 3. `ruff format --check`: format差分
 4. `mypy`: 段階的な型検査
+5. `pytest`: Assembly、Inventoryなどの動作契約テスト
 
 設定は`pyproject.toml`、開発依存は`requirements-dev.txt`が正です。現在のmypy設定は
 動的JSONと一部の実行時objectを許容する移行用baselineです。

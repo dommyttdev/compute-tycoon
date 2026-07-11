@@ -1,0 +1,2 @@
+class ResourceCapacityError(RuntimeError):
+    pass

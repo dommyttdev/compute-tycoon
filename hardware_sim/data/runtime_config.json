@@ -1,0 +1,41 @@
+{
+  "infrastructure": {
+    "nodes": [
+      {
+        "id": "app-1",
+        "name": "Application Server 1",
+        "role": "application_server",
+        "motherboard": "mb.starter.am4.ddr4",
+        "parts": {
+          "processors": ["cpu.starter.4core"],
+          "memory_modules": ["memory.starter"],
+          "storage_devices": ["storage.starter.nvme"]
+        }
+      },
+      {
+        "id": "db-1",
+        "name": "Database Server 1",
+        "role": "database_server",
+        "motherboard": "mb.server.sp5.ddr5",
+        "parts": {
+          "processors": ["cpu.database.16core"],
+          "memory_modules": ["memory.database"],
+          "storage_devices": ["storage.database.nvme"]
+        }
+      }
+    ],
+    "links": [
+      {
+        "source_node": "app-1",
+        "target_node": "db-1",
+        "network_interface": "nic.1gbe"
+      }
+    ]
+  },
+  "simulation": {
+    "monitor_interval": 1.0,
+    "work_id_start": 1,
+    "spawn_interval_min": 0.5,
+    "spawn_interval_max": 3.0
+  }
+}

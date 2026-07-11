@@ -1,0 +1,263 @@
+{
+  "motherboards": {
+    "mb.starter.am4.ddr4": {
+      "name": "Starter AM4 Board",
+      "form_factor": "MicroATX",
+      "chipset": "A520",
+      "max_memory_capacity": 64000,
+      "supports_ecc": false,
+      "cpu_sockets": [
+        { "socket_type": "AM4", "count": 1 }
+      ],
+      "memory_slots": [
+        { "memory_type": "DDR4", "count": 2, "max_capacity_per_slot": 32000 }
+      ],
+      "pcie_slots": [
+        { "generation": 3, "lanes": 16, "count": 1 },
+        { "generation": 3, "lanes": 4, "count": 1 }
+      ],
+      "onboard_lan_ports": [
+        {
+          "connector": "RJ45",
+          "bandwidth": 125,
+          "count": 1,
+          "latency": 0.001,
+          "queue_depth": 16
+        }
+      ],
+      "storage_connectors": [
+        { "connector_type": "M2", "count": 1, "bandwidth": 3500 },
+        { "connector_type": "SATA", "count": 4, "bandwidth": 600 }
+      ]
+    },
+    "mb.server.sp5.ddr5": {
+      "name": "Server SP5 Board",
+      "form_factor": "E-ATX",
+      "chipset": "SP5 Server",
+      "max_memory_capacity": 512000,
+      "supports_ecc": true,
+      "cpu_sockets": [
+        { "socket_type": "SP5", "count": 1 }
+      ],
+      "memory_slots": [
+        { "memory_type": "DDR5", "count": 8, "max_capacity_per_slot": 64000 }
+      ],
+      "pcie_slots": [
+        { "generation": 5, "lanes": 16, "count": 2 },
+        { "generation": 5, "lanes": 8, "count": 2 }
+      ],
+      "onboard_lan_ports": [
+        {
+          "connector": "RJ45",
+          "bandwidth": 1250,
+          "count": 2,
+          "latency": 0.0005,
+          "queue_depth": 64
+        }
+      ],
+      "storage_connectors": [
+        { "connector_type": "M2", "count": 2, "bandwidth": 7000 },
+        { "connector_type": "SATA", "count": 8, "bandwidth": 600 },
+        { "connector_type": "U2", "count": 4, "bandwidth": 7000 }
+      ]
+    }
+  },
+  "processors": {
+    "cpu.starter.4core": {
+      "name": "Starter CPU",
+      "cores": 4,
+      "clock_frequency_hz": 3200000000,
+      "socket_type": "AM4"
+    },
+    "cpu.compute.8core": {
+      "name": "Compute CPU",
+      "cores": 8,
+      "clock_frequency_hz": 3600000000,
+      "socket_type": "AM4"
+    },
+    "cpu.database.16core": {
+      "name": "Database CPU",
+      "cores": 16,
+      "clock_frequency_hz": 3000000000,
+      "socket_type": "SP5"
+    }
+  },
+  "memory": {
+    "memory.starter": {
+      "name": "Starter RAM",
+      "capacity": 1600,
+      "memory_type": "DDR4",
+      "ecc": false
+    },
+    "memory.app": {
+      "name": "Application RAM",
+      "capacity": 3200,
+      "memory_type": "DDR4",
+      "ecc": false
+    },
+    "memory.database": {
+      "name": "Database RAM",
+      "capacity": 12800,
+      "memory_type": "DDR5",
+      "ecc": true
+    }
+  },
+  "storage": {
+    "storage.starter.nvme": {
+      "name": "Starter NVMe SSD",
+      "capacity": 20000,
+      "read_speed": 900,
+      "write_speed": 450,
+      "latency": 0.02,
+      "queue_depth": 2,
+      "connector_type": "M2"
+    },
+    "storage.app.nvme": {
+      "name": "Application NVMe SSD",
+      "capacity": 50000,
+      "read_speed": 1800,
+      "write_speed": 900,
+      "latency": 0.015,
+      "queue_depth": 4,
+      "connector_type": "M2"
+    },
+    "storage.database.nvme": {
+      "name": "Database NVMe Array",
+      "capacity": 200000,
+      "read_speed": 3200,
+      "write_speed": 2400,
+      "latency": 0.008,
+      "queue_depth": 8,
+      "connector_type": "U2"
+    }
+  },
+  "gpus": {
+    "gpu.starter": {
+      "name": "Starter GPU",
+      "compute_units": 16,
+      "compute_tflops": 8.0,
+      "memory_capacity": 12000,
+      "memory_bandwidth": 400,
+      "pcie_generation_required": 3,
+      "pcie_lanes_required": 16
+    },
+    "gpu.training": {
+      "name": "Training GPU",
+      "compute_units": 80,
+      "compute_tflops": 60.0,
+      "memory_capacity": 80000,
+      "memory_bandwidth": 2000,
+      "pcie_generation_required": 4,
+      "pcie_lanes_required": 16
+    }
+  },
+  "network_interfaces": {
+    "nic.1gbe": {
+      "name": "1GbE NIC",
+      "bandwidth": 125,
+      "latency": 0.001,
+      "ports": 1,
+      "queue_depth": 16,
+      "connector": "RJ45",
+      "pcie_generation_required": 2,
+      "pcie_lanes_required": 1
+    },
+    "nic.10gbe": {
+      "name": "10GbE NIC",
+      "bandwidth": 1250,
+      "latency": 0.0005,
+      "ports": 1,
+      "queue_depth": 64,
+      "connector": "RJ45",
+      "pcie_generation_required": 3,
+      "pcie_lanes_required": 4
+    },
+    "nic.switch.48port": {
+      "name": "48-Port Switch Fabric",
+      "bandwidth": 60000,
+      "latency": 0.0002,
+      "ports": 48,
+      "queue_depth": 256,
+      "connector": "SFP",
+      "pcie_generation_required": 4,
+      "pcie_lanes_required": 16
+    }
+  },
+  "cables": {
+    "cable.cat5e.patch": {
+      "name": "Cat5e RJ45 Patch Cable",
+      "bandwidth": 125,
+      "connector": "RJ45"
+    },
+    "cable.cat6.patch": {
+      "name": "Cat6 Patch Cable",
+      "bandwidth": 1250,
+      "connector": "RJ45"
+    },
+    "cable.cat6a.patch": {
+      "name": "Cat6A RJ45 Patch Cable",
+      "bandwidth": 1250,
+      "connector": "RJ45"
+    },
+    "cable.cat8.patch": {
+      "name": "Cat8 RJ45 Patch Cable",
+      "bandwidth": 5000,
+      "connector": "RJ45"
+    },
+    "cable.sfp.1000base-sx.mmf": {
+      "name": "1000BASE-SX SFP Multimode Fiber",
+      "bandwidth": 125,
+      "connector": "SFP"
+    },
+    "cable.sfp.1000base-lx.smf": {
+      "name": "1000BASE-LX SFP Single-mode Fiber",
+      "bandwidth": 125,
+      "connector": "SFP"
+    },
+    "cable.sfpplus.10gbase-sr.mmf": {
+      "name": "10GBASE-SR SFP+ Multimode Fiber",
+      "bandwidth": 1250,
+      "connector": "SFP+"
+    },
+    "cable.sfpplus.10gbase-lr.smf": {
+      "name": "10GBASE-LR SFP+ Single-mode Fiber",
+      "bandwidth": 1250,
+      "connector": "SFP+"
+    },
+    "cable.sfpplus.10g.dac": {
+      "name": "10G SFP+ Direct Attach Copper",
+      "bandwidth": 1250,
+      "connector": "SFP+"
+    },
+    "cable.sfp28.25gbase-sr.mmf": {
+      "name": "25GBASE-SR SFP28 Multimode Fiber",
+      "bandwidth": 3125,
+      "connector": "SFP28"
+    },
+    "cable.sfp28.25g.dac": {
+      "name": "25G SFP28 Direct Attach Copper",
+      "bandwidth": 3125,
+      "connector": "SFP28"
+    },
+    "cable.qsfpplus.40gbase-sr4.mmf": {
+      "name": "40GBASE-SR4 QSFP+ Multimode Fiber",
+      "bandwidth": 5000,
+      "connector": "QSFP+"
+    },
+    "cable.qsfpplus.40g.dac": {
+      "name": "40G QSFP+ Direct Attach Copper",
+      "bandwidth": 5000,
+      "connector": "QSFP+"
+    },
+    "cable.qsfp28.100gbase-sr4.mmf": {
+      "name": "100GBASE-SR4 QSFP28 Multimode Fiber",
+      "bandwidth": 12500,
+      "connector": "QSFP28"
+    },
+    "cable.qsfp28.100g.dac": {
+      "name": "100G QSFP28 Direct Attach Copper",
+      "bandwidth": 12500,
+      "connector": "QSFP28"
+    }
+  }
+}

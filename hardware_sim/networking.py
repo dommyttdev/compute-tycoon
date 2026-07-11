@@ -85,10 +85,13 @@ class RouteEntry:
         network = ip_network(destination, strict=False)
         if network.version != 4:
             raise ValueError("only IPv4 routes are supported")
+        gateway_address = ip_address(gateway) if gateway is not None else None
+        if gateway_address is not None and gateway_address.version != 4:
+            raise ValueError("only IPv4 routes are supported")
         return cls(
             node_id=node_id,
             destination=network,
-            gateway=ip_address(gateway) if gateway is not None else None,
+            gateway=gateway_address,
             interface=interface,
         )
 

@@ -3,6 +3,11 @@
 Keep agent-only instructions concise and in English to minimize context usage.
 Human-facing documentation may use Japanese.
 
+## Encoding
+
+- When reading Japanese text in PowerShell, set console output to UTF-8 and use
+  `Get-Content -Encoding UTF8`; do not rely on the session default encoding.
+
 ## Commits
 
 Follow the commit rules in `CONTRIBUTING.md`.
@@ -12,6 +17,12 @@ Follow the commit rules in `CONTRIBUTING.md`.
 - Write the subject and body in Japanese.
 - Use `docs`, not `doc`, for documentation changes.
 - Do not commit unless the user explicitly asks.
+- A user instruction to perform work authorizes the complete delivery workflow:
+  implement, verify, commit, push, open a PR, obtain the required review, merge,
+  and delete the task branch. Do not pause for separate approval at each step.
+- Stop before completion only for a real blocker such as ambiguous scope,
+  unrelated worktree changes, merge conflicts, failing required checks, missing
+  credentials or permissions, or review changes that require user direction.
 
 ## Branches
 

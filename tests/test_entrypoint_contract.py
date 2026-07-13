@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import hardware
 import hardware_sim
 import main as application
@@ -224,3 +226,52 @@ def test_cli_entrypoint_stops_game_when_command_loop_fails(monkeypatch) -> None:
 
     assert len(games) == 1
     assert games[0].stopped is True
+
+
+@pytest.mark.parametrize(
+    ("argv", "environment", "system", "expected"),
+    (
+        pytest.param(
+            ("--lang", "ja-JP"),
+            {"COMPUTE_TYCOON_LANG": "en-US"},
+            "en-US",
+            "ja",
+            id="explicit-overrides-automatic-sources",
+        ),
+        pytest.param(
+            (),
+            {"COMPUTE_TYCOON_LANG": "ja_JP.UTF-8"},
+            "en-US",
+            "ja",
+            id="environment-used-without-argument",
+        ),
+        pytest.param(
+            (),
+            {},
+            "ja-JP",
+            "ja",
+            id="system-used-without-higher-sources",
+        ),
+        pytest.param(
+            ("--lang", "fr-FR"),
+            {"COMPUTE_TYCOON_LANG": "ja"},
+            "ja",
+            None,
+            id="unsupported-explicit-rejected",
+        ),
+    ),
+)
+def test_cli_locale_resolution_parses_argument_and_delegates_precedence(
+    argv: tuple[str, ...],
+    environment: dict[str, str],
+    system: str,
+    expected: str | None,
+) -> None:
+    if expected is None:
+        with pytest.raises(ValueError) as error:
+            application.resolve_cli_locale(argv, environment, system)
+
+        assert "en" in str(error.value)
+        assert "ja" in str(error.value)
+    else:
+        assert application.resolve_cli_locale(argv, environment, system) == expected

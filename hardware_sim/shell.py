@@ -7,12 +7,424 @@ from hardware_sim.game import (
     ComputeTycoonGame,
     normalize_part_kind,
 )
+from hardware_sim.localization import ENGLISH_INTRO, message, shell_intro
 from hardware_sim.node import NodeRole
 from hardware_sim.work import StepResult, WorkloadResult
 
-INTRO = """Compute Tycoon
-Type 'help' for commands, or start with 'shop' / 'build SERVER_ID'.
-"""
+INTRO = ENGLISH_INTRO
+
+
+@dataclass(frozen=True)
+class HelpTopic:
+    usage: str
+    summary_key: str
+    detail_usages: tuple[str, ...] = ()
+    examples: tuple[str, ...] = ()
+    related: tuple[str, ...] = ()
+    aliases: tuple[str, ...] = ()
+
+    @property
+    def command(self) -> str:
+        return self.usage.partition(" ")[0]
+
+
+@dataclass(frozen=True)
+class HelpGroup:
+    heading_key: str
+    topics: tuple[HelpTopic, ...]
+
+
+TOP_LEVEL_HELP = (
+    HelpGroup(
+        "help.group.acquire",
+        (
+            HelpTopic(
+                "shop",
+                "help.shop.summary",
+                detail_usages=("shop",),
+                examples=("shop",),
+            ),
+            HelpTopic(
+                "inventory",
+                "help.inventory.summary",
+                detail_usages=("inventory",),
+                examples=("inventory",),
+            ),
+            HelpTopic(
+                "build NODE_ID",
+                "help.build.summary",
+                detail_usages=("build NODE_ID",),
+                examples=("build compute-1",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "help.group.nodes",
+        (
+            HelpTopic(
+                "node ...",
+                "help.node.summary",
+                detail_usages=(
+                    "node list | node ls",
+                    "node add NODE_ID ROLE",
+                    "node role set NODE_ID ROLE",
+                    "node show NODE_ID",
+                ),
+                examples=("node add app-1 application_server",),
+                related=("shop", "build", "server"),
+            ),
+            HelpTopic(
+                "server ...",
+                "help.server.summary",
+                detail_usages=(
+                    "server list | server ls",
+                    "server name set NODE_ID NAME",
+                    "server show NODE_ID",
+                ),
+                examples=("server show app-1",),
+            ),
+            HelpTopic(
+                "ssh NODE_ID",
+                "help.ssh.summary",
+                detail_usages=("ssh NODE_ID",),
+                examples=("ssh app-1",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "help.group.topology",
+        (
+            HelpTopic(
+                "link ...",
+                "help.link.summary",
+                detail_usages=(
+                    "link list | link ls",
+                    "link connect NODE:PORT NODE:PORT [CABLE]",
+                    "link disconnect NODE:PORT",
+                ),
+                examples=("link list",),
+            ),
+            HelpTopic(
+                "ip ...",
+                "help.ip.summary",
+                detail_usages=(
+                    "ip addr",
+                    "ip addr add NODE:PORT CIDR",
+                    "ip route [NODE]",
+                ),
+                examples=("ip addr",),
+            ),
+            HelpTopic(
+                "route ...",
+                "help.route.summary",
+                detail_usages=(
+                    "route list [NODE] | route ls [NODE]",
+                    "route add NODE DESTINATION via GATEWAY [dev PORT]",
+                ),
+                examples=("route list",),
+            ),
+            HelpTopic(
+                "ping SOURCE_NODE TARGET_NODE",
+                "help.ping.summary",
+                detail_usages=("ping SOURCE_NODE TARGET_NODE",),
+                examples=("ping app-1 db-1",),
+            ),
+            HelpTopic(
+                "traceroute SOURCE_NODE TARGET_NODE",
+                "help.traceroute.summary",
+                detail_usages=("traceroute SOURCE_NODE TARGET_NODE",),
+                examples=("traceroute app-1 db-1",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "help.group.workloads",
+        (
+            HelpTopic(
+                "run workload KIND",
+                "help.run.summary",
+                detail_usages=("run workload KIND [--jobs N]",),
+                examples=("run workload web",),
+            ),
+            HelpTopic(
+                "logs [NODE]",
+                "help.logs.summary",
+                detail_usages=("logs [NODE]",),
+                examples=("logs app-1",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "help.group.session",
+        (
+            HelpTopic(
+                "help [COMMAND]",
+                "help.help.summary",
+                detail_usages=("help [COMMAND]",),
+                examples=("help node",),
+            ),
+            HelpTopic(
+                "exit | quit",
+                "help.exit.summary",
+                detail_usages=("exit | quit",),
+                examples=("exit",),
+                aliases=("quit",),
+            ),
+        ),
+    ),
+)
+
+SHOP_HELP = (
+    HelpGroup(
+        "shop.group.commands",
+        (
+            HelpTopic("list [KIND] | ls [KIND]", "shop.list.summary"),
+            HelpTopic("buy server ROLE [QTY]", "shop.buy_server.summary"),
+            HelpTopic("buy cable CABLE [QTY]", "shop.buy_cable.summary"),
+            HelpTopic("buy KIND PART_ID [QTY]", "shop.buy_part.summary"),
+            HelpTopic("inventory", "help.inventory.summary"),
+            HelpTopic("exit | back", "shop.exit.summary"),
+        ),
+    ),
+)
+
+BUILD_HELP = (
+    HelpGroup(
+        "build.group.parts",
+        (
+            HelpTopic("motherboard list | motherboard ls", "build.part_list.summary"),
+            HelpTopic("motherboard select PART_ID", "build.part_select.summary"),
+            HelpTopic("cpu|ram|storage|gpu|nic list", "build.part_list.summary"),
+            HelpTopic("cpu|ram|storage|gpu|nic add PART_ID", "build.part_add.summary"),
+            HelpTopic(
+                "cpu|ram|storage|gpu|nic remove PART_ID",
+                "build.part_remove.summary",
+            ),
+        ),
+    ),
+    HelpGroup(
+        "build.group.configure",
+        (
+            HelpTopic("name NAME", "build.name.summary"),
+            HelpTopic("workers COUNT", "build.workers.summary"),
+        ),
+    ),
+    HelpGroup(
+        "build.group.finish",
+        (
+            HelpTopic("summary", "build.summary.summary"),
+            HelpTopic("validate", "build.validate.summary"),
+            HelpTopic("commit", "build.commit.summary"),
+            HelpTopic("cancel | exit", "build.cancel.summary"),
+        ),
+    ),
+)
+
+NODE_HELP = (
+    HelpGroup(
+        "node_shell.group.inspect",
+        (
+            HelpTopic("ip addr", "node_shell.address.summary"),
+            HelpTopic("ip route", "node_shell.route.summary"),
+            HelpTopic("show interfaces", "node_shell.interfaces.summary"),
+            HelpTopic("show ip route", "node_shell.route.summary"),
+            HelpTopic("top", "node_shell.top.summary"),
+            HelpTopic("journalctl", "node_shell.journal.summary"),
+            HelpTopic("exit | logout", "node_shell.exit.summary"),
+        ),
+    ),
+)
+
+SHOP_DETAIL_HELP = (
+    HelpGroup(
+        "shop.group.commands",
+        (
+            HelpTopic(
+                "list [KIND] | ls [KIND]",
+                "shop.list_detail.summary",
+                detail_usages=("list [KIND] | ls [KIND]",),
+                examples=("list server",),
+                aliases=("ls",),
+            ),
+            HelpTopic(
+                "buy ...",
+                "shop.buy.summary",
+                detail_usages=(
+                    "buy server ROLE [QTY]",
+                    "buy cable CABLE [QTY]",
+                    "buy KIND PART_ID [QTY]",
+                ),
+                examples=("buy server application_server",),
+            ),
+            HelpTopic(
+                "inventory",
+                "help.inventory.summary",
+                detail_usages=("inventory",),
+                examples=("inventory",),
+            ),
+            HelpTopic(
+                "exit | back",
+                "shop.exit.summary",
+                detail_usages=("exit | back",),
+                examples=("exit",),
+                aliases=("back",),
+            ),
+        ),
+    ),
+)
+
+BUILD_DETAIL_HELP = (
+    HelpGroup(
+        "build.group.parts",
+        (
+            HelpTopic(
+                "motherboard ...",
+                "build.motherboard.summary",
+                detail_usages=(
+                    "motherboard list | motherboard ls",
+                    "motherboard select PART_ID",
+                ),
+                examples=("motherboard list",),
+            ),
+            HelpTopic(
+                "cpu ...",
+                "build.cpu.summary",
+                detail_usages=(
+                    "cpu list",
+                    "cpu add PART_ID",
+                    "cpu remove PART_ID",
+                ),
+                examples=("cpu list",),
+            ),
+            HelpTopic(
+                "ram ...",
+                "build.ram.summary",
+                detail_usages=(
+                    "ram list",
+                    "ram add PART_ID",
+                    "ram remove PART_ID",
+                ),
+                examples=("ram list",),
+            ),
+            HelpTopic(
+                "storage ...",
+                "build.storage.summary",
+                detail_usages=(
+                    "storage list",
+                    "storage add PART_ID",
+                    "storage remove PART_ID",
+                ),
+                examples=("storage list",),
+            ),
+            HelpTopic(
+                "gpu ...",
+                "build.gpu.summary",
+                detail_usages=(
+                    "gpu list",
+                    "gpu add PART_ID",
+                    "gpu remove PART_ID",
+                ),
+                examples=("gpu list",),
+            ),
+            HelpTopic(
+                "nic ...",
+                "build.nic.summary",
+                detail_usages=(
+                    "nic list",
+                    "nic add PART_ID",
+                    "nic remove PART_ID",
+                ),
+                examples=("nic list",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "build.group.configure",
+        (
+            HelpTopic(
+                "name NAME",
+                "build.name.summary",
+                detail_usages=("name NAME",),
+                examples=("name web-1",),
+            ),
+            HelpTopic(
+                "workers COUNT",
+                "build.workers.summary",
+                detail_usages=("workers COUNT",),
+                examples=("workers 4",),
+            ),
+        ),
+    ),
+    HelpGroup(
+        "build.group.finish",
+        (
+            HelpTopic(
+                "summary",
+                "build.summary.summary",
+                detail_usages=("summary",),
+                examples=("summary",),
+            ),
+            HelpTopic(
+                "validate",
+                "build.validate.summary",
+                detail_usages=("validate",),
+                examples=("validate",),
+            ),
+            HelpTopic(
+                "commit",
+                "build.commit.summary",
+                detail_usages=("commit",),
+                examples=("commit",),
+            ),
+            HelpTopic(
+                "cancel | exit",
+                "build.cancel.summary",
+                detail_usages=("cancel | exit",),
+                examples=("cancel",),
+                aliases=("exit",),
+            ),
+        ),
+    ),
+)
+
+NODE_DETAIL_HELP = (
+    HelpGroup(
+        "node_shell.group.inspect",
+        (
+            HelpTopic(
+                "ip ...",
+                "node_shell.ip.summary",
+                detail_usages=("ip addr", "ip route"),
+                examples=("ip addr",),
+            ),
+            HelpTopic(
+                "show ...",
+                "node_shell.show.summary",
+                detail_usages=("show interfaces", "show ip route"),
+                examples=("show interfaces",),
+            ),
+            HelpTopic(
+                "top",
+                "node_shell.top.summary",
+                detail_usages=("top",),
+                examples=("top",),
+            ),
+            HelpTopic(
+                "journalctl",
+                "node_shell.journal.summary",
+                detail_usages=("journalctl",),
+                examples=("journalctl",),
+            ),
+            HelpTopic(
+                "exit | logout",
+                "node_shell.exit.summary",
+                detail_usages=("exit | logout",),
+                examples=("exit",),
+                aliases=("logout",),
+            ),
+        ),
+    ),
+)
 
 
 @dataclass
@@ -47,9 +459,21 @@ class TycoonShell(cmd.Cmd):
     intro = INTRO
     prompt = "compute-tycoon> "
 
-    def __init__(self, game: ComputeTycoonGame | None = None):
+    def __init__(self, game: ComputeTycoonGame | None = None, *, locale: str = "en"):
         super().__init__()
         self.game = game or ComputeTycoonGame()
+        self.locale = locale
+        self.intro = shell_intro(locale)
+
+    def do_help(self, arg: str):
+        topic_name = arg.strip()
+        if topic_name:
+            topic = _top_level_help_topic(topic_name)
+            if topic is not None and topic.detail_usages:
+                _print_topic_help(self.locale, topic)
+                return None
+            return super().do_help(arg)
+        _print_bare_help(self.locale, TOP_LEVEL_HELP, title_key="help.title")
 
     def do_node(self, arg: str):
         """node list | node add ID ROLE | node role set ID ROLE | node show ID"""
@@ -108,7 +532,7 @@ class TycoonShell(cmd.Cmd):
         try:
             args = _split(arg)
             _require_len(args, 1, "build ID")
-            BuildShell(self.game, args[0]).cmdloop()
+            BuildShell(self.game, args[0], locale=self.locale).cmdloop()
         except Exception as error:
             print(f"error: {error}")
 
@@ -117,7 +541,7 @@ class TycoonShell(cmd.Cmd):
         try:
             args = _split(arg)
             if not args:
-                ShopShell(self.game).cmdloop()
+                ShopShell(self.game, locale=self.locale).cmdloop()
                 return
             raise ValueError(
                 "shop commands are only available in shop mode. "
@@ -224,7 +648,7 @@ class TycoonShell(cmd.Cmd):
         try:
             args = _split(arg)
             _require_len(args, 1, "ssh NODE")
-            NodeShell(self.game, args[0]).cmdloop()
+            NodeShell(self.game, args[0], locale=self.locale).cmdloop()
         except Exception as error:
             print(f"error: {error}")
 
@@ -284,9 +708,21 @@ class ShopShell(cmd.Cmd):
     intro = "Shop mode. Type 'list', 'buy ...', 'inventory', or 'exit'."
     prompt = "shop> "
 
-    def __init__(self, game: ComputeTycoonGame):
+    def __init__(self, game: ComputeTycoonGame, *, locale: str = "en"):
         super().__init__()
         self.game = game
+        self.locale = locale
+        self.intro = message(locale, "shop.intro")
+
+    def do_help(self, arg: str):
+        topic_name = arg.strip()
+        if topic_name:
+            topic = _help_topic(SHOP_DETAIL_HELP, topic_name)
+            if topic is not None:
+                _print_topic_help(self.locale, topic)
+                return None
+            return super().do_help(arg)
+        _print_bare_help(self.locale, SHOP_HELP)
 
     def do_list(self, arg: str):
         """list [KIND]"""
@@ -346,11 +782,22 @@ class ShopShell(cmd.Cmd):
 
 
 class BuildShell(cmd.Cmd):
-    def __init__(self, game: ComputeTycoonGame, node_id: str):
+    def __init__(self, game: ComputeTycoonGame, node_id: str, *, locale: str = "en"):
         super().__init__()
         self.game = game
+        self.locale = locale
         self.draft = BuildDraft(node_id=node_id)
         self.prompt = f"build({node_id})> "
+
+    def do_help(self, arg: str):
+        topic_name = arg.strip()
+        if topic_name:
+            topic = _help_topic(BUILD_DETAIL_HELP, topic_name)
+            if topic is not None:
+                _print_topic_help(self.locale, topic)
+                return None
+            return super().do_help(arg)
+        _print_bare_help(self.locale, BUILD_HELP)
 
     def do_motherboard(self, arg: str):
         """motherboard list | motherboard select PART"""
@@ -512,13 +959,24 @@ class BuildShell(cmd.Cmd):
 
 
 class NodeShell(cmd.Cmd):
-    def __init__(self, game: ComputeTycoonGame, node_id: str):
+    def __init__(self, game: ComputeTycoonGame, node_id: str, *, locale: str = "en"):
         super().__init__()
         self.game = game
+        self.locale = locale
         self.node_id = node_id
         role = self.game.nodes[node_id].role
         suffix = "#" if role in {NodeRole.ROUTER, NodeRole.NETWORK_SWITCH} else "$"
         self.prompt = f"{node_id}{suffix} "
+
+    def do_help(self, arg: str):
+        topic_name = arg.strip()
+        if topic_name:
+            topic = _help_topic(NODE_DETAIL_HELP, topic_name)
+            if topic is not None:
+                _print_topic_help(self.locale, topic)
+                return None
+            return super().do_help(arg)
+        _print_bare_help(self.locale, NODE_HELP)
 
     def do_ip(self, arg: str):
         """ip addr | ip route"""
@@ -583,6 +1041,51 @@ def _parts_for_kind(game: ComputeTycoonGame, kind: str):
         "network_interfaces": game.catalog.network_interfaces,
     }
     return groups[kind]
+
+
+def _top_level_help_topic(command: str) -> HelpTopic | None:
+    return _help_topic(TOP_LEVEL_HELP, command)
+
+
+def _help_topic(groups: tuple[HelpGroup, ...], command: str) -> HelpTopic | None:
+    for group in groups:
+        for topic in group.topics:
+            if topic.command == command or command in topic.aliases:
+                return topic
+    return None
+
+
+def _print_bare_help(
+    locale: str, groups: tuple[HelpGroup, ...], *, title_key: str | None = None
+) -> None:
+    if title_key is not None:
+        print(message(locale, title_key))
+    for group in groups:
+        if title_key is not None or group is not groups[0]:
+            print()
+        print(message(locale, group.heading_key))
+        for topic in group.topics:
+            print(f"  {topic.usage:<38} {message(locale, topic.summary_key)}")
+
+
+def _print_topic_help(locale: str, topic: HelpTopic) -> None:
+    print(f"{topic.command} — {message(locale, topic.summary_key)}")
+    print()
+    print(f"{message(locale, 'help.section.usage')}:")
+    _print_indented(topic.detail_usages)
+    if topic.examples:
+        print()
+        print(f"{message(locale, 'help.section.examples')}:")
+        _print_indented(topic.examples)
+    if topic.related:
+        print()
+        print(f"{message(locale, 'help.section.related')}:")
+        _print_indented(topic.related)
+
+
+def _print_indented(lines: tuple[str, ...]) -> None:
+    for line in lines:
+        print(f"  {line}")
 
 
 def _join(values: list[str]):

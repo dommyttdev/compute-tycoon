@@ -111,6 +111,50 @@ def test_single_worker_starts_accepted_work_in_fifo_order() -> None:
         node.stop()
 
 
+def test_snapshot_distinguishes_running_work_from_queued_work() -> None:
+    first_started = Event()
+    release_first = Event()
+
+    def hold_first_processing(message: str) -> None:
+        if "id=601," in message:
+            first_started.set()
+            assert release_first.wait(timeout=2)
+
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(
+            clock_frequency_hz=1_000_000_000,
+            cpu_sink=hold_first_processing,
+        ),
+        ApplicationServerExecutor(),
+        workers=1,
+    )
+    first = _work(601, cpu=CpuRequirement(1))
+    second = _work(602, cpu=CpuRequirement(1))
+    try:
+        node.put(first)
+        assert first_started.wait(timeout=1)
+        node.put(second)
+
+        while_active = node.snapshot().hardware
+        assert while_active.running_works == 1
+        assert while_active.queued_works == 1
+
+        release_first.set()
+        node.wait_all()
+
+        after_completion = node.snapshot().hardware
+        assert after_completion.running_works == 0
+        assert after_completion.queued_works == 0
+        assert after_completion.completed_works == 2
+        assert after_completion.failed_works == 0
+    finally:
+        release_first.set()
+        node.stop()
+
+
 @pytest.mark.parametrize(
     ("role", "executor_factory", "requirements", "expected_operations"),
     [

@@ -1,12 +1,57 @@
 # Agent instructions
 
-Keep agent-only instructions concise and in English to minimize context usage.
-Human-facing documentation may use Japanese.
+Keep agent-only instructions concise to minimize context usage.
 
 ## Encoding
 
 - When reading Japanese text in PowerShell, set console output to UTF-8 and use
   `Get-Content -Encoding UTF8`; do not rely on the session default encoding.
+
+## Language and token efficiency
+
+- Use the user's language for user interaction, requirement clarification, and
+  final reports. Respond in Japanese when the user writes in Japanese.
+- Use English or structured data for inter-agent instructions, handoffs, review
+  requests, implementation plans, and completion criteria.
+- Use English for code, identifiers, file names, APIs, tests, logs, errors, and
+  commit messages unless repository conventions require otherwise.
+- Prefer concise JSON, YAML, tables, or fixed headings over long prose in
+  inter-agent communication.
+- Give each agent only the context required for its assignment. Do not duplicate
+  the full request, conversation history, or unrelated agent output.
+- State the objective, scope, writable files, protected targets, constraints,
+  acceptance criteria, tests, deliverables, and unresolved risks in every agent
+  assignment.
+- Avoid context-dependent wording such as "same as before," "appropriately," or
+  "as needed." Use short, explicit instructions whenever omission is ambiguous.
+- When converting Japanese requirements into English internal instructions,
+  preserve constraints, exceptions, numbers, proper nouns, and acceptance
+  criteria without over-summarizing.
+- Do not force English when translation would increase work, misunderstanding, or
+  retries. Preserve Japanese when the relevant documents, specifications, or code
+  comments are primarily Japanese.
+- Minimize total cost, including retries, corrections, and duplicate agent
+  communication. Prefer one-pass clarity over brevity alone.
+- Do not split simple work across agents. Use multiple agents only when the
+  parallelization benefit exceeds coordination and context-copying costs.
+- Use this format for agent assignments when practical:
+
+  ```yaml
+  task_id:
+  objective:
+  owned_files:
+  read_only_files:
+  constraints:
+  acceptance_criteria:
+  tests:
+  dependencies:
+  deliverables:
+  unresolved_risks:
+  ```
+
+The operating principle is: communicate with humans in the user's language; use
+English or structured formats internally; keep context minimal; and state
+deliverables and decision criteria explicitly.
 
 ## Commits
 

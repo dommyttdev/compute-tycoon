@@ -81,6 +81,107 @@ def test_real_node_completes_one_work_and_reports_idle_success_snapshot() -> Non
         node.stop()
 
 
+def test_idle_node_role_change_updates_role_and_next_executor_behavior() -> None:
+    cpu_messages: list[str] = []
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(cpu_sink=cpu_messages.append),
+        ApplicationServerExecutor(),
+        workers=1,
+    )
+    work = _work(1, cpu=CpuRequirement(1))
+    try:
+        node.set_role(NodeRole.STORAGE_SERVER)
+        node.put(work)
+        node.wait_all()
+
+        assert node.role is NodeRole.STORAGE_SERVER
+        assert node.is_worked(work)
+        assert cpu_messages == []
+    finally:
+        node.stop()
+
+
+def test_busy_node_rejects_role_change_and_keeps_old_executor_behavior() -> None:
+    first_started = Event()
+    release_first = Event()
+    cpu_messages: list[str] = []
+
+    def hold_first_processing(message: str) -> None:
+        cpu_messages.append(message)
+        if "id=1," in message:
+            first_started.set()
+            assert release_first.wait(timeout=2)
+
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(cpu_sink=hold_first_processing),
+        ApplicationServerExecutor(),
+        workers=1,
+    )
+    first = _work(1, cpu=CpuRequirement(1))
+    second = _work(2, cpu=CpuRequirement(1))
+    try:
+        node.put(first)
+        assert first_started.wait(timeout=1)
+        node.put(second)
+        assert node.snapshot().hardware.queued_works == 1
+
+        with pytest.raises(RuntimeError):
+            node.set_role(NodeRole.STORAGE_SERVER)
+
+        assert node.role is NodeRole.APPLICATION_SERVER
+        release_first.set()
+        node.wait_all()
+        assert node.is_worked(first)
+        assert node.is_worked(second)
+        assert len(cpu_messages) == 2
+    finally:
+        release_first.set()
+        node.stop()
+
+
+def test_setting_same_role_on_stopped_node_is_a_no_op() -> None:
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(),
+        ApplicationServerExecutor(),
+        workers=1,
+    )
+    node.stop()
+    before_change = node.snapshot()
+
+    node.set_role(NodeRole.APPLICATION_SERVER)
+
+    assert node.role is NodeRole.APPLICATION_SERVER
+    assert node.snapshot() == before_change
+
+
+def test_stopped_node_rejects_role_change_without_changing_state() -> None:
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(),
+        ApplicationServerExecutor(),
+        workers=1,
+    )
+    node.stop()
+    before_rejection = node.snapshot()
+
+    with pytest.raises(RuntimeError):
+        node.set_role(NodeRole.STORAGE_SERVER)
+
+    assert node.role is NodeRole.APPLICATION_SERVER
+    assert node.snapshot() == before_rejection
+
+
 def test_single_worker_starts_accepted_work_in_fifo_order() -> None:
     processing_messages: list[str] = []
     first_started = Event()

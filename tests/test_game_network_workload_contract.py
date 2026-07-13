@@ -4,7 +4,13 @@ from copy import deepcopy
 
 import pytest
 
-from hardware_sim import ComputeTycoonGame, NodeRole
+from hardware_sim import (
+    ComputeTycoonGame,
+    CpuRequirement,
+    NodeRole,
+    ResourceRequirements,
+    WorkInfo,
+)
 from hardware_sim.workloads import (
     CpuRequirementProfile,
     InfrastructureWorkloadProfile,
@@ -131,6 +137,62 @@ def test_role_and_name_changes_keep_saved_build_request_consistent(
     assert saved_node["name"] == "Primary database"
     assert game.nodes["node-1"].role is NodeRole.DATABASE_SERVER
     assert game.nodes["node-1"].name == "Primary database"
+
+
+def test_setting_same_game_node_role_is_a_save_state_no_op(
+    game: ComputeTycoonGame,
+) -> None:
+    _place_server(game, "node-1")
+    saved_before = deepcopy(game.to_save_data())
+    events_before = game.event_log.entries()
+    version_before = game.state_version
+
+    game.set_node_role("node-1", NodeRole.APPLICATION_SERVER)
+
+    assert game.nodes["node-1"].role is NodeRole.APPLICATION_SERVER
+    assert game.to_save_data() == saved_before
+    assert game.event_log.entries() == events_before
+    assert game.state_version == version_before
+
+
+def test_busy_role_change_failure_leaves_game_state_unchanged(
+    game: ComputeTycoonGame,
+) -> None:
+    _place_server(game, "node-1")
+    node = game.nodes["node-1"]
+    work = WorkInfo(
+        1,
+        ResourceRequirements(
+            cpu=CpuRequirement(required_clocks=1, clock_usage_hz=1),
+        ),
+    )
+
+    node.put(work)
+    role_before_failure = node.role
+    saved_node_before_failure = deepcopy(game.to_save_data()["nodes"][0])
+    role_events_before_failure = tuple(
+        entry
+        for entry in game.event_log.entries("node-1")
+        if entry.message.startswith("Node role set")
+    )
+    version_before_failure = game.state_version
+    try:
+        with pytest.raises(RuntimeError, match="busy"):
+            game.set_node_role("node-1", NodeRole.DATABASE_SERVER)
+
+        assert node.role is role_before_failure
+        assert game.to_save_data()["nodes"][0] == saved_node_before_failure
+        assert (
+            tuple(
+                entry
+                for entry in game.event_log.entries("node-1")
+                if entry.message.startswith("Node role set")
+            )
+            == role_events_before_failure
+        )
+        assert game.state_version == version_before_failure
+    finally:
+        node.wait_all()
 
 
 def test_cross_node_workload_requires_a_route_before_running(

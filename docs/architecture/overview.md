@@ -50,6 +50,7 @@ node.py ---> snapshots.py ---> monitor.py
 
 各`Node`はCPU並列度または明示した`workers`数のデーモンスレッドを起動します。
 ワークはFIFOキューから取り出され、役割Executorを通してデバイスへ渡されます。
+NodeのRole、Executor、キュー、実行中集合、停止状態は同じ`Condition`で同期します。
 CPUとメモリは`Condition`、ストレージとNICはキュー深度付きSemaphore、GPUは
 `Condition`で競合を表現します。ゲーム状態は`RLock`、ログとデバイス統計は個別の
 Lockで保護されます。

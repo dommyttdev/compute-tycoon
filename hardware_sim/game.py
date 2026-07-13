@@ -632,7 +632,7 @@ class ComputeTycoonGame:
         try:
             with self.save_path.open(encoding="utf-8") as file:
                 data = json.load(file)
-        except json.JSONDecodeError as error:
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise SaveDataError("Invalid save data") from error
 
         try:
@@ -641,8 +641,8 @@ class ComputeTycoonGame:
             version = data["version"]
         except TypeError as error:
             raise SaveDataError(f"Invalid save data: {error}") from error
-        if version != SAVE_VERSION:
-            raise SaveDataError(f"Unsupported save version: {version}")
+        if type(version) is not int or version != SAVE_VERSION:
+            raise SaveDataError(f"Unsupported save version: {version!r}")
 
         staged_nodes: dict[str, Node] = {}
         try:

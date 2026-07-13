@@ -63,6 +63,23 @@ def test_game_load_rejects_unsupported_save_version(tmp_path: Path) -> None:
         ComputeTycoonGame(save_path=save_path, load_save=True)
 
 
+@pytest.mark.parametrize(
+    "version",
+    [
+        pytest.param(True, id="boolean"),
+        pytest.param(1.0, id="float"),
+    ],
+)
+def test_game_load_rejects_non_integer_save_version(
+    tmp_path: Path, version: object
+) -> None:
+    save_path = tmp_path / "save.json"
+    save_path.write_text(json.dumps({"version": version}), encoding="utf-8")
+
+    with pytest.raises(SaveDataError, match=r"(?i)(?:unsupported|invalid).*version"):
+        ComputeTycoonGame(save_path=save_path, load_save=True)
+
+
 def test_game_load_rejects_save_without_version(tmp_path: Path) -> None:
     save_path = tmp_path / "save.json"
     save_path.write_text(json.dumps({}), encoding="utf-8")
@@ -76,6 +93,14 @@ def test_game_load_rejects_malformed_json(tmp_path: Path) -> None:
     save_path.write_text("{not valid json", encoding="utf-8")
 
     with pytest.raises(SaveDataError, match=r"(?i)invalid save data"):
+        ComputeTycoonGame(save_path=save_path, load_save=True)
+
+
+def test_game_load_rejects_invalid_utf8(tmp_path: Path) -> None:
+    save_path = tmp_path / "save.json"
+    save_path.write_bytes(b"\xff\xfe\xfa")
+
+    with pytest.raises(SaveDataError, match="Invalid save data"):
         ComputeTycoonGame(save_path=save_path, load_save=True)
 
 
@@ -124,6 +149,49 @@ def test_failed_load_stops_workers_started_for_restored_nodes(tmp_path: Path) ->
     with pytest.raises(SaveDataError, match="Invalid save data"):
         ComputeTycoonGame(save_path=save_path, load_save=True)
 
+    assert not any(
+        thread.is_alive() and thread.name.startswith(f"{node_id}-worker-")
+        for thread in threading.enumerate()
+    )
+
+
+def test_load_stops_started_worker_when_next_thread_fails_to_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node_id = "load-thread-start-failure-node"
+    source = ComputeTycoonGame(save_path=None, load_save=False)
+    try:
+        source.buy_server(NodeRole.APPLICATION_SERVER)
+        source.add_node(node_id, NodeRole.APPLICATION_SERVER)
+        save_data = source.to_save_data()
+    finally:
+        source.stop_all()
+
+    nodes = save_data["nodes"]
+    assert isinstance(nodes, list)
+    node_data = nodes[0]
+    assert isinstance(node_data, dict)
+    node_data["workers"] = 2
+    save_path = tmp_path / "save.json"
+    save_path.write_text(json.dumps(save_data), encoding="utf-8")
+
+    original_start = threading.Thread.start
+    target_starts = 0
+
+    def fail_second_target_start(thread: threading.Thread) -> None:
+        nonlocal target_starts
+        if thread.name.startswith(f"{node_id}-worker-"):
+            target_starts += 1
+            if target_starts == 2:
+                raise RuntimeError("injected thread start failure")
+        original_start(thread)
+
+    monkeypatch.setattr(threading.Thread, "start", fail_second_target_start)
+
+    with pytest.raises(RuntimeError, match="injected thread start failure"):
+        ComputeTycoonGame(save_path=save_path, load_save=True)
+
+    assert target_starts == 2
     assert not any(
         thread.is_alive() and thread.name.startswith(f"{node_id}-worker-")
         for thread in threading.enumerate()

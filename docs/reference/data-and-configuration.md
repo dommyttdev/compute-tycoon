@@ -33,7 +33,7 @@ Cable、InterfaceAddress、RouteEntryです。実行中Work、Device使用率、
 置換までに失敗した場合は既存の本体ファイルを維持し、未完成の`.tmp`を削除してエラーを
 呼び出し元へ返します。
 
-現在の保存形式versionは1です。読み込みはNodeを生成する前にversionを検証し、versionが
+現在の保存形式versionは整数`1`です。読み込みはNodeを生成する前にversionを検証し、versionが
 欠落したデータ、対応外version、破損したJSONや不正な保存項目を`SaveDataError`で拒否します。
 復元したInventory、Node、NetworkTopologyは全項目の検証と生成が成功した場合だけGameへ
 反映します。途中で失敗した場合は読み込み中に生成したNodeを停止し、部分状態を公開しません。

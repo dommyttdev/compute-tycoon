@@ -157,10 +157,14 @@ def main(
     config = config or DEFAULT_CODE_RUNTIME_CONFIG
     simulation = config.simulation
     module = module or create_runtime_module(config)
-    monitor = HardwareMonitor(module, interval=simulation.monitor_interval)
-    monitor.start()
+    monitor = None
+    monitor_started = False
 
     try:
+        monitor = HardwareMonitor(module, interval=simulation.monitor_interval)
+        monitor.start()
+        monitor_started = True
+
         for work_id in count(simulation.work_id_start):
             if max_jobs is not None and work_id > max_jobs:
                 break
@@ -182,10 +186,17 @@ def main(
         print("\nStopping...")
 
     finally:
-        module.wait_all()
-        monitor.stop()
-        module.stop()
-        print("Stopped")
+        if monitor is None or not monitor_started:
+            module.stop()
+        else:
+            try:
+                module.wait_all()
+            finally:
+                try:
+                    monitor.stop()
+                finally:
+                    module.stop()
+                    print("Stopped")
 
 
 def create_runtime_module(config: RuntimeConfig):
@@ -223,7 +234,11 @@ def put_work(module: HardwareModule | Node | Infrastructure, work):
 
 
 def run_cli():
-    TycoonShell().cmdloop()
+    shell = TycoonShell()
+    try:
+        shell.cmdloop()
+    finally:
+        shell.game.stop_all()
 
 
 if __name__ == "__main__":

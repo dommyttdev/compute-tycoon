@@ -1,3 +1,8 @@
+import argparse
+import locale
+import os
+import sys
+from collections.abc import Mapping, Sequence
 from itertools import count
 from random import uniform
 from time import sleep
@@ -22,6 +27,7 @@ from hardware import (
     StorageDevice,
     TycoonShell,
 )
+from hardware_sim.localization import resolve_locale
 
 DEFAULT_SIMULATION_CONFIG = SimulationConfig(
     monitor_interval=1.0,
@@ -233,8 +239,30 @@ def put_work(module: HardwareModule | Node | Infrastructure, work):
     module.put(work)
 
 
-def run_cli():
-    shell = TycoonShell()
+def resolve_cli_locale(
+    argv: Sequence[str], environment: Mapping[str, str], system: str | None
+) -> str:
+    parser = argparse.ArgumentParser(prog="main.py")
+    parser.add_argument("--lang", metavar="LOCALE")
+    arguments = parser.parse_args(argv)
+    return resolve_locale(
+        arguments.lang,
+        environment.get("COMPUTE_TYCOON_LANG"),
+        system,
+    )
+
+
+def run_cli(argv: Sequence[str] | None = None):
+    try:
+        detected_system_locale = locale.getlocale()[0]
+    except OSError, ValueError:
+        detected_system_locale = None
+    selected_locale = resolve_cli_locale(
+        () if argv is None else argv,
+        os.environ,
+        detected_system_locale,
+    )
+    shell = TycoonShell(locale=selected_locale)
     try:
         shell.cmdloop()
     finally:
@@ -242,4 +270,4 @@ def run_cli():
 
 
 if __name__ == "__main__":
-    run_cli()
+    run_cli(sys.argv[1:])

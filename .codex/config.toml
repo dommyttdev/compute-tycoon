@@ -1,4 +1,4 @@
 [agents]
-max_threads = 4
+max_threads = 8
 max_depth = 1
 interrupt_message = false

@@ -84,8 +84,21 @@ class Node:
             Thread(target=self._run, name=f"{id}-worker-{index}", daemon=True)
             for index in range(1, worker_count + 1)
         ]
-        for thread in self._threads:
-            thread.start()
+        started_threads: list[Thread] = []
+        try:
+            for thread in self._threads:
+                thread.start()
+                started_threads.append(thread)
+        except BaseException:
+            with self._condition:
+                self._is_stopped = True
+                self._condition.notify_all()
+            for thread in started_threads:
+                try:
+                    thread.join()
+                except BaseException:
+                    pass
+            raise
 
     @property
     def cpu(self):

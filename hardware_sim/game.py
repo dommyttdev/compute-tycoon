@@ -6,6 +6,7 @@ from threading import RLock
 
 from hardware_sim.assembly import NodeAssemblyConfig, NodeBuilder
 from hardware_sim.catalog import DEFAULT_PARTS_CATALOG, PartsCatalog
+from hardware_sim.errors import SaveDataError
 from hardware_sim.events import EventLog
 from hardware_sim.executors import executor_for_role
 from hardware_sim.monitor import HardwareMonitor
@@ -628,36 +629,54 @@ class ComputeTycoonGame:
         )
 
     def _load(self):
-        with self.save_path.open(encoding="utf-8") as file:
-            data = json.load(file)
+        try:
+            with self.save_path.open(encoding="utf-8") as file:
+                data = json.load(file)
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise SaveDataError("Invalid save data") from error
 
-        with self._state_lock:
-            self.inventory = Inventory.from_dict(data.get("inventory", {}))
-            self._nodes = {}
-            self._build_requests = {}
-            self.topology = NetworkTopology(nodes=self._nodes)
+        try:
+            if "version" not in data:
+                raise SaveDataError("Save data version is missing")
+            version = data["version"]
+        except TypeError as error:
+            raise SaveDataError(f"Invalid save data: {error}") from error
+        if type(version) is not int or version != SAVE_VERSION:
+            raise SaveDataError(f"Unsupported save version: {version!r}")
 
+        staged_nodes: dict[str, Node] = {}
+        try:
+            staged_inventory = Inventory.from_dict(data.get("inventory", {}))
+            staged_build_requests: dict[str, BuildRequest] = {}
             for node_config in data.get("nodes", []):
                 request = _build_request_from_dict(node_config)
-                self._build_node(request)
+                if request.node_id in staged_nodes:
+                    raise ValueError(f"Node already exists: {request.node_id}")
+                request = _request_with_default_name(request)
+                node = NodeBuilder(self.catalog, event_log=self.event_log).build(
+                    _assembly_from_request(request)
+                )
+                staged_nodes[node.id] = node
+                staged_build_requests[node.id] = request
 
+            staged_topology = NetworkTopology(nodes=staged_nodes)
             network = data.get("network", {})
             links = network.get("links", network.get("cables", []))
             for cable in links:
-                self.topology = self.topology.add_cable(
+                staged_topology = staged_topology.add_cable(
                     NetworkPortRef.parse(cable["a"]),
                     NetworkPortRef.parse(cable["b"]),
                     cable_id=str(cable.get("cable", DEFAULT_CABLE_ID)),
                 )
             for address in network.get("addresses", []):
-                self.topology = self.topology.add_address(
+                staged_topology = staged_topology.add_address(
                     InterfaceAddress.create(
                         NetworkPortRef.parse(address["port"]),
                         address["address"],
                     )
                 )
             for route in network.get("routes", []):
-                self.topology = self.topology.add_route(
+                staged_topology = staged_topology.add_route(
                     RouteEntry.create(
                         node_id=route["node"],
                         destination=route["destination"],
@@ -665,6 +684,23 @@ class ComputeTycoonGame:
                         interface=route.get("interface"),
                     )
                 )
+        except BaseException as error:
+            for node in staged_nodes.values():
+                try:
+                    node.stop()
+                except BaseException:
+                    pass
+            if isinstance(error, SaveDataError):
+                raise
+            if isinstance(error, (AttributeError, TypeError, KeyError, ValueError)):
+                raise SaveDataError(f"Invalid save data: {error}") from error
+            raise
+
+        with self._state_lock:
+            self.inventory = staged_inventory
+            self._nodes = staged_nodes
+            self._build_requests = staged_build_requests
+            self.topology = staged_topology
             self._state_version = 0
 
     def _node(self, node_id: str):

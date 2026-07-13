@@ -45,6 +45,13 @@ class AutosaveWorker:
     def _write(self, data: dict[str, object]):
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = self.save_path.with_suffix(f"{self.save_path.suffix}.tmp")
-        with temporary_path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, indent=2)
-        temporary_path.replace(self.save_path)
+        try:
+            with temporary_path.open("w", encoding="utf-8") as file:
+                json.dump(data, file, indent=2)
+            temporary_path.replace(self.save_path)
+        except BaseException:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except BaseException:
+                pass
+            raise

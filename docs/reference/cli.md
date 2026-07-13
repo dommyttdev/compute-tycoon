@@ -17,7 +17,7 @@
 | `ping SOURCE TARGET` | 到達性を確認 |
 | `traceroute SOURCE TARGET` | 通過Nodeを表示 |
 | `ssh NODE` | Nodeローカルシェルへ移動 |
-| `run workload KIND [--jobs N]` | Workloadを実行 |
+| `run workload KIND [--jobs N]` | Application Serverを入口としてWorkloadを実行し、構造化結果を表示 |
 | `logs [NODE]` | EventLogを表示 |
 | `exit` / `quit` | 保存をflushして終了 |
 
@@ -35,6 +35,19 @@
 ## NodeShell
 
 `ip addr`、`ip route`、`show interfaces`、`top`、`journalctl`を提供します。
+
+## Workload結果
+
+`run workload`はGameが返した`WorkloadResult`をShellが表示します。Gameは表示文字列を
+組み立てません。出力にはWorkload、各Job、各Stepのcompleted/failedと失敗理由、入口
+Application Server、各backend子StepのRoleとNode、解決した経路を含めます。各失敗理由は
+安定したcodeと人向けmessageとして表示します。
+
+親Application ServerのWorkは、preの開始からbackend子Workの同期待機とpostの終了まで
+runningです。子が失敗した場合は子の理由に加えて親の`delegation_failed`を表示し、通常のpostは
+実行されません。`--jobs N`で一つのJobが失敗しても後続Jobは実行し、最後にすべてのJob結果を
+表示します。入口がない、対象Roleがない、Node/Roleが不一致、経路不能、Node実行失敗は
+Python例外や`StopIteration`の表示ではなく、安定したdomain failure codeとして表示します。
 
 ## 最小例
 

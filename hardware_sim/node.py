@@ -2,6 +2,7 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from threading import Condition, Thread
+from typing import Callable
 
 from hardware_sim.devices import (
     GpuDevice,
@@ -12,7 +13,7 @@ from hardware_sim.devices import (
 )
 from hardware_sim.executors import executor_for_role
 from hardware_sim.snapshots import HardwareSnapshot, NodeSnapshot
-from hardware_sim.work import WorkInfo
+from hardware_sim.work import FailureReason, NodeWorkResult, WorkInfo
 
 
 class NodeRole(str, Enum):
@@ -56,6 +57,7 @@ class Node:
         executor: object,
         workers: int | None = None,
         event_log: object | None = None,
+        dispatcher: Callable[..., object] | None = None,
     ):
         if not id:
             raise ValueError("id must not be empty")
@@ -72,11 +74,13 @@ class Node:
         self.devices = devices
         self._executor = executor
         self.event_log = event_log
+        self._dispatcher = dispatcher
 
         self._work_pool = deque()
         self._current_works = set()
         self._worked = set()
         self._failed = {}
+        self._results = {}
 
         self._condition = Condition()
         self._is_stopped = False
@@ -134,6 +138,27 @@ class Node:
             self._work_pool.append(work_info)
             self._condition.notify()
 
+    def wait_for(self, work_info: WorkInfo):
+        with self._condition:
+            while work_info in self._current_works or work_info in self._work_pool:
+                self._condition.wait()
+
+            if work_info in self._failed:
+                return self._failed[work_info]
+            if work_info in self._worked:
+                return NodeWorkResult(
+                    status="completed",
+                    value=self._results.get(work_info),
+                )
+            raise ValueError(
+                f"Work was not submitted to node {self.id}: {work_info.id}"
+            )
+
+    def dispatch(self, parent, delegation, index: int):
+        if self._dispatcher is None:
+            raise RuntimeError("No work dispatcher is configured")
+        return self._dispatcher(self, parent, delegation, index)
+
     def log(self, message: str):
         if self.event_log is None:
             print(message)
@@ -144,6 +169,11 @@ class Node:
     def is_busy(self):
         with self._condition:
             return bool(self._current_works) or bool(self._work_pool)
+
+    @property
+    def is_stopped(self):
+        with self._condition:
+            return self._is_stopped
 
     def set_role(self, role: NodeRole | str) -> bool:
         normalized_role = NodeRole(role)
@@ -228,16 +258,32 @@ class Node:
                 executor = self._executor
 
             succeeded = False
+            failed_result = None
             try:
-                executor.execute(work_info, self)
-                succeeded = True
+                result = executor.execute(work_info, self)
+                if isinstance(result, NodeWorkResult) and result.status == "failed":
+                    failed_result = result
+                    reason = result.failure.message if result.failure else "unknown"
+                    self.log(
+                        f"Failed: node={self.id}, id={work_info.id}, reason={reason}"
+                    )
+                else:
+                    succeeded = True
             except Exception as error:
                 self.log(f"Failed: node={self.id}, id={work_info.id}, reason={error}")
-                with self._condition:
-                    self._failed[work_info] = error
+                failed_result = NodeWorkResult(
+                    status="failed",
+                    failure=FailureReason(
+                        code="node_execution_failed",
+                        message="Node execution failed",
+                    ),
+                )
             finally:
                 with self._condition:
                     self._current_works.discard(work_info)
                     if succeeded:
                         self._worked.add(work_info)
+                        self._results[work_info] = result
+                    elif failed_result is not None:
+                        self._failed[work_info] = failed_result
                     self._condition.notify_all()

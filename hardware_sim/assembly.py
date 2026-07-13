@@ -38,9 +38,11 @@ class NodeBuilder:
         self,
         catalog: PartsCatalog,
         event_log: object | None = None,
+        dispatcher: Callable[..., object] | None = None,
     ):
         self.catalog = catalog
         self.event_log = event_log
+        self.dispatcher = dispatcher
 
     def build(self, assembly: NodeAssemblyConfig):
         sink = self._sink_for(assembly.id)
@@ -53,6 +55,7 @@ class NodeBuilder:
             executor=executor_for_role(assembly.role),
             workers=assembly.workers,
             event_log=self.event_log,
+            dispatcher=self.dispatcher,
         )
 
     def build_module(self, assembly: NodeAssemblyConfig):

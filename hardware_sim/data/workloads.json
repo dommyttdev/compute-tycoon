@@ -1,115 +1,165 @@
 {
-  "infrastructure_profiles": [
-    {
-      "kind": "web-request-with-db",
-      "steps": [
-        {
-          "node": "app-1",
-          "requirements": {
-            "network": {
-              "ingress": [5, 10],
-              "egress": [10, 20],
-              "connections": [1, 3]
-            },
-            "cpu": {
-              "required_clocks": [200000000, 500000000],
-              "clock_usage_hz": [800000000, 1600000000]
-            },
-            "memory": {
-              "capacity": [128, 256]
-            },
-            "storage": {
-              "read": [10, 40],
-              "write": [5, 20]
-            }
-          }
-        },
-        {
-          "node": "db-1",
-          "requirements": {
-            "network": {
-              "ingress": [10, 20],
-              "egress": [20, 40],
-              "connections": [1, 3]
-            },
-            "cpu": {
-              "required_clocks": [500000000, 1200000000],
-              "clock_usage_hz": [1200000000, 3200000000]
-            },
-            "memory": {
-              "capacity": [512, 1024]
-            },
-            "storage": {
-              "read": [400, 900],
-              "write": [40, 120]
-            }
-          }
-        }
-      ]
-    }
-  ],
   "profiles": [
     {
       "kind": "ai-training",
       "requirements": {
-        "cpu": {
-          "required_clocks": [3000000000, 6000000000],
-          "clock_usage_hz": [6400000000, 12800000000]
-        },
-        "memory": {
-          "capacity": [512, 900]
-        },
-        "storage": {
-          "read": [200, 500],
-          "write": [80, 180]
-        }
+        "cpu": {"required_clocks": [3000000000, 6000000000], "clock_usage_hz": [6400000000, 12800000000]},
+        "memory": {"capacity": [512, 900]},
+        "storage": {"read": [200, 500], "write": [80, 180]}
       }
     },
     {
       "kind": "database-query",
       "requirements": {
-        "cpu": {
-          "required_clocks": [600000000, 1600000000],
-          "clock_usage_hz": [800000000, 2400000000]
-        },
-        "memory": {
-          "capacity": [256, 512]
-        },
-        "storage": {
-          "read": [500, 1200],
-          "write": [20, 80]
-        }
+        "cpu": {"required_clocks": [600000000, 1600000000], "clock_usage_hz": [800000000, 2400000000]},
+        "memory": {"capacity": [256, 512]},
+        "storage": {"read": [500, 1200], "write": [20, 80]}
       }
     },
     {
       "kind": "video-encoding",
       "requirements": {
-        "cpu": {
-          "required_clocks": [5000000000, 8000000000],
-          "clock_usage_hz": [3200000000, 9600000000]
-        },
-        "memory": {
-          "capacity": [256, 600]
-        },
-        "storage": {
-          "read": [300, 800],
-          "write": [400, 1000]
-        }
+        "cpu": {"required_clocks": [5000000000, 8000000000], "clock_usage_hz": [3200000000, 9600000000]},
+        "memory": {"capacity": [256, 600]},
+        "storage": {"read": [300, 800], "write": [400, 1000]}
       }
     },
     {
       "kind": "backup",
       "requirements": {
-        "cpu": {
-          "required_clocks": [200000000, 800000000],
-          "clock_usage_hz": [200000000, 800000000]
+        "cpu": {"required_clocks": [200000000, 800000000], "clock_usage_hz": [200000000, 800000000]},
+        "memory": {"capacity": [128, 256]},
+        "storage": {"read": [700, 1500], "write": [700, 1500]}
+      }
+    }
+  ],
+  "application_profiles": [
+    {
+      "kind": "ai-training",
+      "application": {
+        "pre": {
+          "network": {"ingress": [5, 10], "egress": [0, 0], "connections": [1, 1]},
+          "cpu": {"required_clocks": [100000000, 300000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
         },
-        "memory": {
-          "capacity": [128, 256]
+        "delegations": [
+          {
+            "role": "gpu_worker",
+            "requirements": {
+              "cpu": {"required_clocks": [3000000000, 6000000000], "clock_usage_hz": [6400000000, 12800000000]},
+              "memory": {"capacity": [512, 900]},
+              "storage": {"read": [200, 500], "write": [80, 180]},
+              "gpu": {"compute": [3000000000000, 6000000000000], "memory": [512, 900]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [5, 10], "connections": [1, 1]},
+          "cpu": {"required_clocks": [50000000, 150000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        }
+      }
+    },
+    {
+      "kind": "database-query",
+      "application": {
+        "pre": {
+          "network": {"ingress": [5, 10], "egress": [0, 0], "connections": [1, 1]},
+          "cpu": {"required_clocks": [100000000, 300000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
         },
-        "storage": {
-          "read": [700, 1500],
-          "write": [700, 1500]
+        "delegations": [
+          {
+            "role": "database_server",
+            "requirements": {
+              "cpu": {"required_clocks": [600000000, 1600000000], "clock_usage_hz": [800000000, 2400000000]},
+              "memory": {"capacity": [256, 512]},
+              "storage": {"read": [500, 1200], "write": [20, 80]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [5, 10], "connections": [1, 1]},
+          "cpu": {"required_clocks": [50000000, 150000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        }
+      }
+    },
+    {
+      "kind": "video-encoding",
+      "application": {
+        "pre": {
+          "network": {"ingress": [5, 10], "egress": [0, 0], "connections": [1, 1]},
+          "cpu": {"required_clocks": [100000000, 300000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        },
+        "delegations": [
+          {
+            "role": "gpu_worker",
+            "requirements": {
+              "cpu": {"required_clocks": [5000000000, 8000000000], "clock_usage_hz": [3200000000, 9600000000]},
+              "memory": {"capacity": [256, 600]},
+              "storage": {"read": [300, 800], "write": [400, 1000]},
+              "gpu": {"compute": [2000000000000, 5000000000000], "memory": [256, 600]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [5, 10], "connections": [1, 1]},
+          "cpu": {"required_clocks": [50000000, 150000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        }
+      }
+    },
+    {
+      "kind": "backup",
+      "application": {
+        "pre": {
+          "network": {"ingress": [5, 10], "egress": [0, 0], "connections": [1, 1]},
+          "cpu": {"required_clocks": [100000000, 300000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        },
+        "delegations": [
+          {
+            "role": "storage_server",
+            "requirements": {
+              "cpu": {"required_clocks": [200000000, 800000000], "clock_usage_hz": [200000000, 800000000]},
+              "memory": {"capacity": [128, 256]},
+              "storage": {"read": [700, 1500], "write": [700, 1500]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [5, 10], "connections": [1, 1]},
+          "cpu": {"required_clocks": [50000000, 150000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
+        }
+      }
+    },
+    {
+      "kind": "web-request-with-db",
+      "application": {
+        "pre": {
+          "network": {"ingress": [5, 10], "egress": [10, 20], "connections": [1, 3]},
+          "cpu": {"required_clocks": [200000000, 500000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [128, 256]},
+          "storage": {"read": [10, 40], "write": [5, 20]}
+        },
+        "delegations": [
+          {
+            "role": "database_server",
+            "requirements": {
+              "network": {"ingress": [10, 20], "egress": [20, 40], "connections": [1, 3]},
+              "cpu": {"required_clocks": [500000000, 1200000000], "clock_usage_hz": [1200000000, 3200000000]},
+              "memory": {"capacity": [512, 1024]},
+              "storage": {"read": [400, 900], "write": [40, 120]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [10, 20], "connections": [1, 3]},
+          "cpu": {"required_clocks": [50000000, 150000000], "clock_usage_hz": [800000000, 1600000000]},
+          "memory": {"capacity": [64, 128]}
         }
       }
     }

@@ -2,6 +2,15 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+ALLOWED_DELEGATION_ROLES = frozenset(
+    {"database_server", "gpu_worker", "storage_server"}
+)
+
+
+def validate_delegation_role(role: str):
+    if role not in ALLOWED_DELEGATION_ROLES:
+        raise ValueError(f"Unsupported delegation role: {role}")
+
 
 @dataclass(frozen=True)
 class CpuRequirement:
@@ -173,3 +182,67 @@ class InfrastructureWorkInfo:
     def __post_init__(self):
         if not self.steps:
             raise ValueError("steps must not be empty")
+
+
+@dataclass(frozen=True)
+class ApplicationWorkDelegation:
+    role: str
+    requirements: ResourceRequirements
+    node_id: str | None = None
+
+    def __post_init__(self):
+        validate_delegation_role(self.role)
+
+
+@dataclass(frozen=True)
+class ApplicationWorkInfo:
+    id: int
+    kind: str
+    pre: ResourceRequirements | None
+    delegations: tuple[ApplicationWorkDelegation, ...]
+    post: ResourceRequirements | None
+
+    def __hash__(self):
+        return hash(self.id)
+
+
+@dataclass(frozen=True)
+class FailureReason:
+    code: str
+    message: str
+
+
+@dataclass(frozen=True)
+class StepResult:
+    work_id: int | None
+    role: str
+    node_id: str | None
+    status: str
+    phase: str
+    route: tuple[str, ...] = ()
+    children: tuple["StepResult", ...] = ()
+    failure: FailureReason | None = None
+
+
+@dataclass(frozen=True)
+class NodeWorkResult:
+    status: str
+    value: object | None = None
+    failure: FailureReason | None = None
+    children: tuple[StepResult, ...] = ()
+
+
+@dataclass(frozen=True)
+class JobResult:
+    id: int
+    status: str
+    failure: FailureReason | None
+    root: StepResult
+
+
+@dataclass(frozen=True)
+class WorkloadResult:
+    kind: str
+    status: str
+    failure: FailureReason | None
+    jobs: tuple[JobResult, ...]

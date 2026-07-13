@@ -7,6 +7,8 @@ from typing import Protocol
 
 from hardware_sim.config_paths import workloads_config_resource
 from hardware_sim.work import (
+    ApplicationWorkDelegation,
+    ApplicationWorkInfo,
     CpuRequirement,
     GpuRequirement,
     InfrastructureWorkInfo,
@@ -16,6 +18,7 @@ from hardware_sim.work import (
     ResourceRequirements,
     StorageRequirement,
     WorkInfo,
+    validate_delegation_role,
 )
 
 IntRange = tuple[int, int]
@@ -167,23 +170,96 @@ class InfrastructureWorkloadProfile:
         )
 
 
+@dataclass(frozen=True)
+class ApplicationDelegationProfile:
+    role: str
+    requirements: tuple[RequirementProfile, ...]
+    node_id: str | None = None
+
+    def __post_init__(self):
+        validate_delegation_role(self.role)
+
+    def sample(self, random_int: Callable[[int, int], int] = randint):
+        return ApplicationWorkDelegation(
+            role=self.role,
+            node_id=self.node_id,
+            requirements=_sample_requirements(self.requirements, random_int),
+        )
+
+
+@dataclass(frozen=True)
+class ApplicationWorkloadProfile:
+    kind: str
+    pre: tuple[RequirementProfile, ...] | None
+    delegations: tuple[ApplicationDelegationProfile, ...]
+    post: tuple[RequirementProfile, ...] | None
+
+    def create_work(
+        self,
+        work_id: int,
+        random_int: Callable[[int, int], int] = randint,
+    ):
+        return ApplicationWorkInfo(
+            id=work_id,
+            kind=self.kind,
+            pre=(
+                _sample_requirements(self.pre, random_int)
+                if self.pre is not None
+                else None
+            ),
+            delegations=tuple(
+                delegation.sample(random_int) for delegation in self.delegations
+            ),
+            post=(
+                _sample_requirements(self.post, random_int)
+                if self.post is not None
+                else None
+            ),
+        )
+
+
 class WorkloadCatalog:
     def __init__(
         self,
-        profiles: list[WorkloadProfile | InfrastructureWorkloadProfile],
+        profiles: list[
+            WorkloadProfile | InfrastructureWorkloadProfile | ApplicationWorkloadProfile
+        ],
         choose: Callable[
-            [list[WorkloadProfile | InfrastructureWorkloadProfile]],
-            WorkloadProfile | InfrastructureWorkloadProfile,
+            [
+                list[
+                    WorkloadProfile
+                    | InfrastructureWorkloadProfile
+                    | ApplicationWorkloadProfile
+                ]
+            ],
+            WorkloadProfile
+            | InfrastructureWorkloadProfile
+            | ApplicationWorkloadProfile,
         ] = choice,
     ):
         if not profiles:
             raise ValueError("profiles must not be empty")
 
-        self._profiles = profiles
+        self._profiles = [
+            profile
+            for profile in profiles
+            if not isinstance(profile, ApplicationWorkloadProfile)
+        ]
+        self._application_profiles = [
+            profile
+            for profile in profiles
+            if isinstance(profile, ApplicationWorkloadProfile)
+        ]
         self._choose = choose
+
+    @property
+    def has_application_profiles(self):
+        return bool(self._application_profiles)
 
     def create_work(self, work_id: int, kind: str | None = None):
         if kind is None:
+            if not self._profiles:
+                raise ValueError("legacy workload profiles must not be empty")
             return self._choose(self._profiles).create_work(work_id)
 
         for profile in self._profiles:
@@ -191,6 +267,18 @@ class WorkloadCatalog:
                 return profile.create_work(work_id)
 
         raise KeyError(f"Unknown workload profile: {kind}")
+
+    def create_application_work(self, work_id: int, kind: str | None = None):
+        if kind is None:
+            if not self._application_profiles:
+                raise ValueError("application workload profiles must not be empty")
+            return self._choose(self._application_profiles).create_work(work_id)
+
+        for profile in self._application_profiles:
+            if profile.kind == kind:
+                return profile.create_work(work_id)
+
+        raise KeyError(f"Unknown application workload profile: {kind}")
 
 
 def load_workload_catalog(path: str | Path | None = None):
@@ -213,6 +301,10 @@ def load_workload_catalog(path: str | Path | None = None):
                     "infrastructure_profiles",
                     [],
                 )
+            ]
+            + [
+                _build_application_workload_profile(profile_config)
+                for profile_config in config.get("application_profiles", [])
             ]
         ),
     )
@@ -245,6 +337,52 @@ def _build_infrastructure_work_step_profile(config: ProfileConfig):
             _build_requirement_profile(key, requirement_config)
             for key, requirement_config in config["requirements"].items()
         ),
+    )
+
+
+def _build_application_workload_profile(config: ProfileConfig):
+    application = config["application"]
+    return ApplicationWorkloadProfile(
+        kind=str(config["kind"]),
+        pre=_build_optional_phase(application, "pre"),
+        delegations=tuple(
+            _build_application_delegation_profile(delegation)
+            for delegation in application.get("delegations", [])
+        ),
+        post=_build_optional_phase(application, "post"),
+    )
+
+
+def _build_application_delegation_profile(config: ProfileConfig):
+    role = str(config["role"])
+    return ApplicationDelegationProfile(
+        role=role,
+        node_id=str(config["node"]) if "node" in config else None,
+        requirements=tuple(
+            _build_requirement_profile(key, requirement_config)
+            for key, requirement_config in config["requirements"].items()
+        ),
+    )
+
+
+def _build_optional_phase(config: ProfileConfig, key: str):
+    if key not in config:
+        return None
+    phase_config = config[key]
+    if not phase_config:
+        raise ValueError(f"Application phase '{key}' must be non-empty")
+    return tuple(
+        _build_requirement_profile(name, requirement_config)
+        for name, requirement_config in phase_config.items()
+    )
+
+
+def _sample_requirements(
+    profiles: tuple[RequirementProfile, ...],
+    random_int: Callable[[int, int], int],
+):
+    return ResourceRequirements(
+        **{profile.key: profile.sample(random_int) for profile in profiles}
     )
 
 

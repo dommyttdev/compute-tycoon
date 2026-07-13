@@ -21,7 +21,7 @@ from hardware_sim.devices import (
     Processor,
     StorageDevice,
 )
-from hardware_sim.errors import ResourceCapacityError
+from hardware_sim.errors import ResourceCapacityError, SaveDataError
 from hardware_sim.events import EventLog, LogEntry
 from hardware_sim.executors import (
     ApplicationServerExecutor,
@@ -165,6 +165,7 @@ __all__ = [
     "RouteResolution",
     "RouterExecutor",
     "RuntimeConfig",
+    "SaveDataError",
     "SimulationConfig",
     "StorageServerExecutor",
     "StorageDevice",

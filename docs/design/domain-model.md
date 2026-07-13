@@ -12,6 +12,17 @@
 
 状態変更はゲームの`RLock`内で行い、成功後に`state_version`を増やします。
 
+## 保存と復元
+
+保存データはInventory、NodeのBuildRequest、NetworkTopologyを一つのGame Snapshotとして
+扱います。読み込みはversionを検証した後、一時的なInventory、Node集合、BuildRequest集合、
+NetworkTopologyを構築します。すべての検証と生成が成功した場合だけ、`RLock`内でGame状態を
+まとめて置き換えます。
+
+復元途中で失敗した場合はGame状態を変更せず、一時状態へ生成したNodeをすべて停止します。
+保存データのversion欠落、対応外version、破損、不正な項目は`SaveDataError`として呼び出し元へ
+返します。version検証はworker threadを持つNodeの生成より前に行います。
+
 ## 購入・消費・構築
 
 完成品サーバー、部品、ケーブルは購入時にInventoryへ追加されます。完成品配置では

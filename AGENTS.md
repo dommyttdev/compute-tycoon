@@ -62,6 +62,10 @@ Use the single-context domain layout. See `docs/agents/domain.md`.
 Apply rules in this order: correctness and invariants, least surprise, locality,
 readability, reuse, then extensibility.
 
+- Follow test-driven development for behavior changes. Work one observable
+  behavior at a time through RED, GREEN, and REFACTOR: write a failing test
+  first, implement only enough to pass it, and refactor only while tests are
+  green.
 - Read `CONTEXT.md` and relevant ADRs before changing domain behavior.
 - Use canonical domain terms and preserve documented module boundaries.
 - Prefer the simplest current solution; do not add speculative abstractions,

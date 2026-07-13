@@ -66,6 +66,13 @@ readability, reuse, then extensibility.
   behavior at a time through RED, GREEN, and REFACTOR: write a failing test
   first, implement only enough to pass it, and refactor only while tests are
   green.
+- Treat documentation as the source of truth when designing, writing, or
+  modifying tests. Do not inspect production implementation code for those
+  activities, and never change a test merely to match the existing
+  implementation. If documentation is incomplete or conflicts with the
+  implementation, clarify or update the documentation before proceeding.
+- Do not use mocks in tests. Exercise observable behavior through public
+  interfaces using real collaborators.
 - Read `CONTEXT.md` and relevant ADRs before changing domain behavior.
 - Use canonical domain terms and preserve documented module boundaries.
 - Prefer the simplest current solution; do not add speculative abstractions,

@@ -567,3 +567,20 @@ def test_japanese_nested_command_help_is_structured_and_aliases_resolve(
         assert all(alias_output == output for alias_output in outputs[1:])
     finally:
         game.stop_all()
+
+
+@pytest.mark.parametrize(
+    ("system", "expected"),
+    (
+        pytest.param("Japanese_Japan", "ja", id="japanese"),
+        pytest.param("English_United States", "en", id="english"),
+        pytest.param("JAPANESE_JAPAN.932", "ja", id="case-and-encoding"),
+    ),
+)
+def test_locale_resolution_accepts_windows_system_locale_names(
+    system: str,
+    expected: str,
+) -> None:
+    from hardware_sim.localization import resolve_locale
+
+    assert resolve_locale(None, None, system) == expected

@@ -176,4 +176,5 @@ def resolve_locale(
 def _normalize_locale(locale: str) -> str:
     normalized = locale.strip().lower().split(".", maxsplit=1)[0]
     normalized = normalized.replace("_", "-")
-    return normalized.split("-", maxsplit=1)[0]
+    base = normalized.split("-", maxsplit=1)[0]
+    return {"english": "en", "japanese": "ja"}.get(base, base)

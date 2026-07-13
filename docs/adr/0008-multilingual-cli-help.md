@@ -20,7 +20,8 @@ LocaleはCLI entrypointで一度だけ解決し、`TycoonShell`から`ShopShell`
 `NodeShell`へ明示的に渡す。Domain objectとGame APIへlocaleやtranslatorを渡さない。
 
 Localeの選択優先順位は、明示的な`--lang`、`COMPUTE_TYCOON_LANG`環境変数、OS locale、英語の
-順とする。大文字小文字、`_` / `-`、encoding suffix、地域tagを正規化して基底言語を選ぶ。
+順とする。大文字小文字、`_` / `-`、encoding suffix、地域tag、Windowsの
+`Japanese_Japan`などのOS固有名を正規化して基底言語を選ぶ。
 明示した未対応localeは利用可能な値を示して起動を拒否する。環境変数またはOSの未対応値と
 取得失敗は英語へfallbackする。翻訳項目の欠落も項目単位で英語へfallbackする。
 

@@ -15,8 +15,8 @@ python main.py [--lang LOCALE]
 4. 英語 (`en`)
 
 Localeは大文字と小文字を区別せず、`_`を`-`として扱い、encoding suffixを無視します。
-地域を含む値は基底言語へ正規化するため、`ja-JP`と`ja_JP.UTF-8`は`ja`、`en-US`は
-`en`になります。
+地域を含む値とOS固有名は基底言語へ正規化するため、`ja-JP`、`ja_JP.UTF-8`、
+Windowsの`Japanese_Japan`は`ja`、`en-US`と`English_United States`は`en`になります。
 
 `--lang`へ未対応のlocaleを明示した場合は、利用可能なlocaleを示す起動エラーとし、Shellを
 開始しません。環境変数またはOSから得たlocaleが未対応、空、または取得不能の場合は英語を

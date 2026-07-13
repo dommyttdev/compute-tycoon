@@ -16,9 +16,9 @@ delivery workflow through branch cleanup.
 ## Approval
 
 Require exactly one approver per change. QA is the default approver. Use the
-manager instead when the change affects requirements, architecture, security,
-persistence compatibility, release risk, or when QA cannot decide. Do not request
-both unless the user explicitly requires dual approval.
+`risk-reviewer` instead when the change affects requirements, architecture,
+security, persistence compatibility, release risk, or when QA cannot decide. Do
+not request both unless the user explicitly requires dual approval.
 
 The approver reviews the complete PR diff and relevant verification, then reports
 `OK` with the branch name and reviewed commit SHA. Root records or submits that
@@ -51,7 +51,7 @@ Examples: `feat/123-network-bandwidth`, `fix/storage-rounding`, and
    switching branches.
 3. Subagents perform bounded work; root integrates and verifies the diff.
 4. Root commits, pushes, and opens a ready-for-review PR.
-5. QA reviews normal changes; the manager reviews high-risk or exceptional
+5. QA reviews normal changes; `risk-reviewer` reviews high-risk or exceptional
    changes. Only one of them reviews the complete PR diff.
 6. Root addresses review feedback and obtains a fresh review after content changes.
 7. Root merges after required checks pass, then deletes the branch when safe.
@@ -91,6 +91,6 @@ discard, overwrite, or mix changes to make preparation possible.
 - Unauthorized stash, reset, discard, overwrite, force-push, or history rewrite.
 - Accumulating unrelated tasks on one branch.
 - Acting on missing, ambiguous, stale, or out-of-scope review approval.
-- Requesting both QA and manager approval by default.
+- Requesting both QA and `risk-reviewer` approval by default.
 - Treating branch creation or switching alone as authorization for delivery when
   the user has not instructed the agent to perform the work.

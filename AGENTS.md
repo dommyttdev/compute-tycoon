@@ -97,8 +97,13 @@ tasks, track dependencies, integrate results, and own the final answer.
   format it needs. Request concise findings, not raw logs or full file contents.
 - Parallelize independent read-only tasks. Use one writer per overlapping file set;
   sequence dependent or conflicting edits.
-- Use `architect` for impact analysis and design, `engineer` for bounded changes,
-  and `qa` for independent verification.
+- Use `explorer` for bounded read-only evidence gathering, `architect` for impact
+  analysis and design, `engineer` for production code, and `test-engineer` for
+  independent test-only changes.
+- Use `qa` for normal complete-diff verification and approval. Use
+  `risk-reviewer` instead for high-risk changes involving requirements,
+  architecture, security, persistence compatibility, or release risk. Require
+  exactly one approver for each complete branch-and-commit diff.
 - Do not ask subagents to re-plan the whole task or repeat context already supplied.
 - The root agent reviews diffs, resolves conflicts, runs final proportional checks,
   and reports only integrated outcomes.

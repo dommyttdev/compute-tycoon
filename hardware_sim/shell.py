@@ -8,6 +8,7 @@ from hardware_sim.game import (
     normalize_part_kind,
 )
 from hardware_sim.node import NodeRole
+from hardware_sim.work import StepResult, WorkloadResult
 
 INTRO = """Compute Tycoon
 Type 'help' for commands, or start with 'shop' / 'build SERVER_ID'.
@@ -238,7 +239,11 @@ class TycoonShell(cmd.Cmd):
                 if len(args) != 4 or args[2] != "--jobs":
                     raise ValueError("usage: run workload KIND [--jobs N]")
                 jobs = int(args[3])
-            _print_lines(self.game.run_workload(args[1], jobs=jobs))
+            result = self.game.run_workload(args[1], jobs=jobs)
+            if isinstance(result, WorkloadResult):
+                _print_lines(_format_workload_result(result))
+            else:
+                _print_lines(result)
         except Exception as error:
             print(f"error: {error}")
 
@@ -600,3 +605,29 @@ def _print_lines(lines):
         print(line)
     if not printed:
         print("(empty)")
+
+
+def _format_workload_result(result: WorkloadResult):
+    lines = [f"Workload {result.kind}: {result.status}"]
+    if result.failure is not None:
+        lines.append(f"  failure={result.failure.code}: {result.failure.message}")
+    for job in result.jobs:
+        lines.append(f"Job {job.id}: {job.status}")
+        if job.failure is not None:
+            lines.append(f"  failure={job.failure.code}: {job.failure.message}")
+        lines.extend(_format_step_result(job.root, indent="  "))
+    return tuple(lines)
+
+
+def _format_step_result(step: StepResult, indent: str):
+    node = step.node_id or "-"
+    route = " -> ".join(step.route) if step.route else "-"
+    lines = [
+        f"{indent}{step.phase}: {step.status} role={step.role} "
+        f"node={node} work={step.work_id} route={route}"
+    ]
+    if step.failure is not None:
+        lines.append(f"{indent}  failure={step.failure.code}: {step.failure.message}")
+    for child in step.children:
+        lines.extend(_format_step_result(child, indent=f"{indent}  "))
+    return lines

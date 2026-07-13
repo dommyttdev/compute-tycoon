@@ -10,6 +10,7 @@ from hardware_sim import (
     CpuRequirement,
     DatabaseServerExecutor,
     EventLog,
+    FailureReason,
     GpuDevice,
     GpuRequirement,
     GpuWorkerExecutor,
@@ -30,6 +31,7 @@ from hardware_sim import (
     StorageServerExecutor,
     WorkInfo,
 )
+from hardware_sim.node import NodeWorkResult
 
 
 def _work(work_id: int, **requirements: object) -> WorkInfo:
@@ -506,6 +508,38 @@ def test_worker_records_failure_and_logs_it() -> None:
         assert node.is_failed(work)
         assert not node.is_worked(work)
         assert "controlled failure" in event_log.entries()[0].message
+    finally:
+        executor.release.set()
+        node.stop()
+
+
+def test_wait_for_failed_work_returns_immutable_structured_failure() -> None:
+    executor = _ControlledExecutor(error=RuntimeError("controlled internal failure"))
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(),
+        executor,
+        workers=1,
+    )
+    work = _work(1, cpu=CpuRequirement(1))
+    try:
+        node.put(work)
+        assert executor.started.wait(timeout=1)
+        executor.release.set()
+
+        result = node.wait_for(work)
+
+        assert isinstance(result, NodeWorkResult)
+        assert result.status == "failed"
+        assert result.value is None
+        assert not isinstance(result.failure, BaseException)
+        assert isinstance(result.failure, FailureReason)
+        assert result.failure.code == "node_execution_failed"
+        assert result.failure.message == "Node execution failed"
+        with pytest.raises(FrozenInstanceError):
+            result.status = "completed"
     finally:
         executor.release.set()
         node.stop()

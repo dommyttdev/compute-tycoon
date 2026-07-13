@@ -17,6 +17,14 @@ from hardware_sim.networking import (
 )
 from hardware_sim.node import Node, NodeRole
 from hardware_sim.persistence import AutosaveWorker
+from hardware_sim.work import (
+    ApplicationWorkInfo,
+    FailureReason,
+    JobResult,
+    StepResult,
+    WorkInfo,
+    WorkloadResult,
+)
 from hardware_sim.workloads import DEFAULT_WORKLOADS, WorkloadCatalog
 
 DEFAULT_SAVE_PATH = Path(__file__).parent / "data" / "save_game.json"
@@ -324,7 +332,11 @@ class ComputeTycoonGame:
 
         request = _request_with_default_name(request)
         assembly = _assembly_from_request(request)
-        node = NodeBuilder(self.catalog, event_log=self.event_log).build(
+        node = NodeBuilder(
+            self.catalog,
+            event_log=self.event_log,
+            dispatcher=self._dispatch_application_delegation,
+        ).build(
             assembly,
         )
         self._nodes[node.id] = node
@@ -413,9 +425,38 @@ class ComputeTycoonGame:
         results = []
         for _ in range(jobs):
             work_id = next(self._work_ids)
-            work = self.workloads.create_work(work_id, kind=kind)
-            results.append(self._run_work(work))
-        return tuple(results)
+            work = self.workloads.create_application_work(work_id, kind=kind)
+            results.append(self._run_application_work(work))
+
+        failure = next(
+            (result.failure for result in results if result.failure is not None),
+            None,
+        )
+        return WorkloadResult(
+            kind=kind,
+            status="failed" if failure is not None else "completed",
+            failure=failure,
+            jobs=tuple(results),
+        )
+
+    def _no_ingress_job(self, work):
+        failure = FailureReason(
+            code="no_ingress",
+            message="No Application Server is available",
+        )
+        return JobResult(
+            id=work.id,
+            status="failed",
+            failure=failure,
+            root=StepResult(
+                work_id=work.id,
+                role=NodeRole.APPLICATION_SERVER.value,
+                node_id=None,
+                status="failed",
+                phase="root",
+                failure=failure,
+            ),
+        )
 
     def node_summary(self):
         return tuple(
@@ -580,36 +621,217 @@ class ComputeTycoonGame:
             },
         }
 
-    def _run_work(self, work):
-        if not hasattr(work, "steps"):
-            first_node_id = next(iter(self._nodes))
-            self._node(first_node_id).put(work)
-            self._node(first_node_id).wait_all()
-            return f"{work.kind} ran on {first_node_id}"
+    def _run_application_work(self, work: ApplicationWorkInfo):
+        with self._state_lock:
+            candidates = tuple(
+                node
+                for node in self._nodes.values()
+                if node.role is NodeRole.APPLICATION_SERVER and not node.is_stopped
+            )
+            if not candidates:
+                return self._no_ingress_job(work)
+            node = min(candidates, key=lambda candidate: candidate.id)
+            try:
+                node.put(work)
+            except RuntimeError:
+                return self._no_ingress_job(work)
 
-        previous_node_id = None
-        routes = []
-        for step in work.steps:
-            self._node(step.node_id)
-            if previous_node_id is not None:
-                route = self.topology.resolve(previous_node_id, step.node_id)
-                routes.append(route.describe())
+        outcome = node.wait_for(work)
+        if outcome.status != "completed":
+            failure = outcome.failure or FailureReason(
+                code="node_execution_failed",
+                message="Node execution failed",
+            )
+            root = StepResult(
+                work_id=work.id,
+                role=NodeRole.APPLICATION_SERVER.value,
+                node_id=node.id,
+                status="failed",
+                phase="root",
+                children=outcome.children,
+                failure=failure,
+            )
+            return JobResult(
+                id=work.id,
+                status="failed",
+                failure=failure,
+                root=root,
+            )
+        root = StepResult(
+            work_id=work.id,
+            role=NodeRole.APPLICATION_SERVER.value,
+            node_id=node.id,
+            status="completed",
+            phase="root",
+            children=tuple(outcome.value or ()),
+        )
+        job = JobResult(id=work.id, status="completed", failure=None, root=root)
+        return job
+
+    def _dispatch_application_delegation(
+        self,
+        source: Node,
+        parent: ApplicationWorkInfo,
+        delegation,
+        index: int,
+    ):
+        with self._state_lock:
+            topology = self.topology
+            candidates: tuple[Node, ...]
+            if delegation.node_id is not None:
+                target = self._nodes.get(delegation.node_id)
+                if target is None:
+                    return StepResult(
+                        work_id=parent.id * 1000 + index,
+                        role=delegation.role,
+                        node_id=delegation.node_id,
+                        status="failed",
+                        phase="delegation",
+                        failure=FailureReason(
+                            code="node_not_found",
+                            message=f"Node not found: {delegation.node_id}",
+                        ),
+                    )
+                if target.role.value != delegation.role:
+                    return StepResult(
+                        work_id=parent.id * 1000 + index,
+                        role=delegation.role,
+                        node_id=target.id,
+                        status="failed",
+                        phase="delegation",
+                        failure=FailureReason(
+                            code="role_mismatch",
+                            message=(
+                                f"Node {target.id} has role {target.role.value}, "
+                                f"expected {delegation.role}"
+                            ),
+                        ),
+                    )
+                candidates = (target,)
+            else:
+                candidates = tuple(
+                    sorted(
+                        (
+                            node
+                            for node in self._nodes.values()
+                            if node.role.value == delegation.role
+                        ),
+                        key=lambda node: node.id,
+                    )
+                )
+
+            first_unreachable = None
+            for target in candidates:
+                if target.id == source.id:
+                    return StepResult(
+                        work_id=parent.id * 1000 + index,
+                        role=delegation.role,
+                        node_id=target.id,
+                        status="failed",
+                        phase="delegation",
+                        failure=FailureReason(
+                            code="role_mismatch",
+                            message="Application Server cannot delegate to itself",
+                        ),
+                    )
+                try:
+                    route = topology.resolve(source.id, target.id)
+                except ValueError:
+                    if first_unreachable is None:
+                        first_unreachable = target
+                    continue
                 self.event_log.record(
-                    previous_node_id,
-                    f"Network route to {step.node_id}: {route.describe()}",
+                    source.id,
+                    f"Network route to {target.id}: {route.describe()}",
                 )
                 self.event_log.record(
-                    step.node_id,
-                    f"Network route from {previous_node_id}: {route.describe()}",
+                    target.id,
+                    f"Network route from {source.id}: {route.describe()}",
+                )
+                child = WorkInfo(
+                    id=parent.id * 1000 + index,
+                    kind=f"{parent.kind}:{delegation.role}",
+                    requirements=delegation.requirements,
+                )
+                try:
+                    target.put(child)
+                except Exception:
+                    return StepResult(
+                        work_id=child.id,
+                        role=delegation.role,
+                        node_id=target.id,
+                        status="failed",
+                        phase="delegation",
+                        route=route.hops,
+                        failure=FailureReason(
+                            code="node_execution_failed",
+                            message=f"Work could not run on node {target.id}",
+                        ),
+                    )
+                break
+            else:
+                if first_unreachable is not None:
+                    return StepResult(
+                        work_id=parent.id * 1000 + index,
+                        role=delegation.role,
+                        node_id=first_unreachable.id,
+                        status="failed",
+                        phase="delegation",
+                        failure=FailureReason(
+                            code="route_unreachable",
+                            message=(
+                                f"No route from {source.id} to {first_unreachable.id}"
+                            ),
+                        ),
+                    )
+                return StepResult(
+                    work_id=parent.id * 1000 + index,
+                    role=delegation.role,
+                    node_id=None,
+                    status="failed",
+                    phase="delegation",
+                    failure=FailureReason(
+                        code="no_eligible_node",
+                        message=f"No node has role {delegation.role}",
+                    ),
                 )
 
-            node = self._node(step.node_id)
-            node.put(step.work)
-            node.wait_all()
-            previous_node_id = step.node_id
-
-        route_text = "; ".join(routes) if routes else "local"
-        return f"{work.kind} completed routes=[{route_text}]"
+        try:
+            outcome = target.wait_for(child)
+        except Exception:
+            return StepResult(
+                work_id=child.id,
+                role=delegation.role,
+                node_id=target.id,
+                status="failed",
+                phase="delegation",
+                route=route.hops,
+                failure=FailureReason(
+                    code="node_execution_failed",
+                    message=f"Work could not run on node {target.id}",
+                ),
+            )
+        if outcome.status != "completed":
+            return StepResult(
+                work_id=child.id,
+                role=delegation.role,
+                node_id=target.id,
+                status="failed",
+                phase="delegation",
+                route=route.hops,
+                failure=FailureReason(
+                    code="node_execution_failed",
+                    message=f"Work failed on node {target.id}",
+                ),
+            )
+        return StepResult(
+            work_id=child.id,
+            role=delegation.role,
+            node_id=target.id,
+            status="completed",
+            phase="delegation",
+            route=route.hops,
+        )
 
     def _refresh_topology(self):
         self.topology = NetworkTopology(
@@ -644,9 +866,11 @@ class ComputeTycoonGame:
                 if request.node_id in staged_nodes:
                     raise ValueError(f"Node already exists: {request.node_id}")
                 request = _request_with_default_name(request)
-                node = NodeBuilder(self.catalog, event_log=self.event_log).build(
-                    _assembly_from_request(request)
-                )
+                node = NodeBuilder(
+                    self.catalog,
+                    event_log=self.event_log,
+                    dispatcher=self._dispatch_application_delegation,
+                ).build(_assembly_from_request(request))
                 staged_nodes[node.id] = node
                 staged_build_requests[node.id] = request
 

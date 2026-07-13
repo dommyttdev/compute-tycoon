@@ -5,7 +5,7 @@
 | ファイル | 内容 |
 | --- | --- |
 | `parts_catalog.json` | Motherboard、CPU、Memory、Storage、GPU、NIC、Cable |
-| `workloads.json` | 単一Node/複数NodeのWorkloadプロファイル |
+| `workloads.json` | NodeローカルWorkとApplication Server親Workのプロファイル |
 | `runtime_config.json` | コード駆動シミュレーションの構成と生成間隔 |
 
 これらは`importlib.resources`でパッケージ内から読みます。各loaderは任意の外部Pathも
@@ -22,6 +22,50 @@
 
 各Requirement値は要素数2の配列で、両端を含む整数範囲です。未知のRequirement種別、
 空のカタログ、不正な型は読み込み時に拒否されます。
+
+## プレイ用Workload実行計画
+
+`workloads.json`の`profiles`は従来どおりコード駆動モデル向けのNodeローカルWorkを定義します。
+プレイ用profileは別の`application_profiles`配列に置き、Application Serverの親Workを次の
+最小構造で定義します。従来の`infrastructure_profiles`はこの形式へ置き換えます。
+
+```json
+{
+  "application_profiles": [
+    {
+      "kind": "ai-training",
+      "application": {
+        "pre": {
+          "network": {"ingress": [10, 20], "egress": [0, 0], "connections": [1, 1]},
+          "cpu": {"required_clocks": [100, 200], "clock_usage_hz": [100, 200]}
+        },
+        "delegations": [
+          {
+            "role": "gpu_worker",
+            "requirements": {
+              "memory": {"capacity": [512, 1024]},
+              "gpu": {"compute": [1000, 2000], "memory": [256, 512]}
+            }
+          }
+        ],
+        "post": {
+          "network": {"ingress": [0, 0], "egress": [10, 20], "connections": [1, 1]}
+        }
+      }
+    }
+  ]
+}
+```
+
+`pre`と`post`はApplication Serverで消費するRequirement、`delegations`の各
+`requirements`は対象backendで消費するRequirementです。委譲先は`role`で必ず明記し、
+Requirementから推測しません。`role`には`database_server`、`gpu_worker`、`storage_server`を
+指定できます。特定Nodeへ固定する場合だけ任意の`node`を追加します。
+
+`delegations`は空でもよく、その場合はApplication Server内でpre、postを実行します。
+`pre`または`post`を省略した場合、そのphaseは実行しません。存在するphaseのRequirement mapは
+空にできません。範囲値の検証規則は従来と同じです。Application Server自身は配置データへ
+記述せず、Gameが`application_server` RoleのNodeからID順で選びます。
 
 ## セーブデータ
 

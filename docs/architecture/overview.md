@@ -37,7 +37,7 @@ node.py ---> snapshots.py ---> monitor.py
 | コンポーネント | 責務 |
 | --- | --- |
 | `TycoonShell` | 入力解析と表示。ゲーム規則を保持しない |
-| `ComputeTycoonGame` | インベントリ、ノード、ネットワーク、実行、保存を調整 |
+| `ComputeTycoonGame` | インベントリ、ノード、ネットワーク、配置・委譲、実行結果、保存を調整 |
 | `NodeBuilder` | カタログ参照、互換性検証、実行時デバイス生成 |
 | `Node` | ワーカー・キュー・成功/失敗状態を所有 |
 | `RoleExecutor` | 役割ごとにデバイス処理順序を決定 |
@@ -54,6 +54,13 @@ NodeのRole、Executor、キュー、実行中集合、停止状態は同じ`Con
 CPUとメモリは`Condition`、ストレージとNICはキュー深度付きSemaphore、GPUは
 `Condition`で競合を表現します。ゲーム状態は`RLock`、ログとデバイス統計は個別の
 Lockで保護されます。
+
+プレイ用WorkloadではApplication Serverのworkerが親Workをrunningのまま保持し、Gameが提供する
+狭いdispatcherを通してbackendの子Workを同期実行します。RoleExecutorはphase順序だけを所有し、
+Gameが対象NodeとNetworkTopology上の経路を選びます。子待機には対象Workだけを待つ
+`Node.wait_for()`を使います。GameのRLock、NodeのCondition、Application Serverの一時Device資源を
+保持したまま子を待つことは禁止します。委譲方向をApplication Serverからbackendだけに制限し、
+同期wait graphを非循環に保ちます。
 
 ## 二つの実行モデル
 

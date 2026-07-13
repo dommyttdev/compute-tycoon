@@ -8,6 +8,12 @@ from hardware_sim.snapshots import (
     ProcessorSnapshot,
     StorageSnapshot,
 )
+from hardware_sim.work import (
+    FailureReason,
+    JobResult,
+    StepResult,
+    WorkloadResult,
+)
 
 
 class _GameProbe:
@@ -54,6 +60,74 @@ def test_run_workload_passes_integer_jobs_to_public_game_api(capsys) -> None:
 
     assert game.calls == [("run_workload", "web", 4)]
     assert capsys.readouterr().out == "scheduled\n"
+
+
+def test_run_workload_renders_structured_parent_and_child_failure(capsys) -> None:
+    parent_failure = FailureReason(
+        code="delegation_failed",
+        message="Delegated GPU work failed",
+    )
+    child_failure = FailureReason(
+        code="node_execution_failed",
+        message="GPU memory capacity exceeded",
+    )
+    result = WorkloadResult(
+        kind="ai-training",
+        status="failed",
+        failure=parent_failure,
+        jobs=(
+            JobResult(
+                id=1,
+                status="failed",
+                failure=parent_failure,
+                root=StepResult(
+                    work_id=1,
+                    role="application_server",
+                    node_id="app-1",
+                    status="failed",
+                    phase="application",
+                    children=(
+                        StepResult(
+                            work_id=1001,
+                            role="gpu_worker",
+                            node_id="gpu-1",
+                            status="failed",
+                            phase="delegated",
+                            route=("app-1", "switch-1", "gpu-1"),
+                            failure=child_failure,
+                        ),
+                    ),
+                    failure=parent_failure,
+                ),
+            ),
+        ),
+    )
+
+    class FailedWorkloadGame(_GameProbe):
+        def run_workload(self, kind: str, *, jobs: int) -> WorkloadResult:
+            self.calls.append(("run_workload", kind, jobs))
+            return result
+
+    game = FailedWorkloadGame()
+    TycoonShell(game).onecmd("run workload ai-training")
+
+    assert game.calls == [("run_workload", "ai-training", 1)]
+    output = capsys.readouterr().out
+    for expected in (
+        "ai-training",
+        "failed",
+        "Job 1",
+        "application_server",
+        "app-1",
+        "gpu_worker",
+        "gpu-1",
+        "app-1 -> switch-1 -> gpu-1",
+        "delegation_failed",
+        "Delegated GPU work failed",
+        "node_execution_failed",
+        "GPU memory capacity exceeded",
+    ):
+        assert expected in output
 
 
 def test_route_add_maps_optional_interface_to_typed_game_argument(capsys) -> None:

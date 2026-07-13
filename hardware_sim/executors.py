@@ -1,10 +1,13 @@
 from typing import Protocol
 
 from hardware_sim.work import (
+    ApplicationWorkInfo,
     CpuRequirement,
+    FailureReason,
     GpuRequirement,
     MemoryRequirement,
     NetworkRequirement,
+    NodeWorkResult,
     StorageRequirement,
     WorkInfo,
 )
@@ -21,6 +24,56 @@ class UnassignedExecutor:
 
 class ApplicationServerExecutor:
     def execute(self, work_info: WorkInfo, node: object):
+        if isinstance(work_info, ApplicationWorkInfo):
+            return self._execute_application_work(work_info, node)
+
+        self._execute_phase(work_info, node)
+
+    def _execute_application_work(self, work_info: ApplicationWorkInfo, node: object):
+        _log_execute(work_info, node)
+        if work_info.pre is not None:
+            self._execute_phase(
+                WorkInfo(
+                    work_info.id * 1000 + 1, work_info.pre, f"{work_info.kind}:pre"
+                ),
+                node,
+            )
+        children = []
+        for index, delegation in enumerate(work_info.delegations, start=1):
+            child = node.dispatch(work_info, delegation, index)
+            children.append(child)
+            if child.status != "completed":
+                return NodeWorkResult(
+                    status="failed",
+                    failure=FailureReason(
+                        code="delegation_failed",
+                        message="Application delegation failed",
+                    ),
+                    children=tuple(children),
+                )
+        if work_info.post is not None:
+            try:
+                self._execute_phase(
+                    WorkInfo(
+                        work_info.id * 1000 + 999,
+                        work_info.post,
+                        f"{work_info.kind}:post",
+                    ),
+                    node,
+                )
+            except Exception:
+                return NodeWorkResult(
+                    status="failed",
+                    failure=FailureReason(
+                        code="node_execution_failed",
+                        message="Node execution failed",
+                    ),
+                    children=tuple(children),
+                )
+        _log_executed(work_info, node)
+        return tuple(children)
+
+    def _execute_phase(self, work_info: WorkInfo, node: object):
         _log_execute(work_info, node)
         _receive_network_if_available(work_info, node)
         _allocate_memory_if_required(work_info, node)

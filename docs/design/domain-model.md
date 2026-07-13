@@ -42,20 +42,34 @@
 
 `NodeRole`はExecutorを選択します。
 
-| 役割 | 主な処理 |
+| 役割 | RequirementとDevice処理の順序 |
 | --- | --- |
 | `unassigned` | 実行不可 |
-| `application_server` | NIC受信→RAM→Storage→CPU→Storage→NIC送信 |
-| `database_server` | Application Serverと同じ資源順序 |
-| `storage_server` | NIC受信→Storage読書き→NIC送信 |
-| `network_switch` | NIC受信→NIC送信 |
-| `router` | NIC受信→CPU→NIC送信 |
-| `gpu_worker` | RAM→Storage→GPU→CPU→Storage |
+| `application_server` | Network受信→Memory確保→Storage読取→CPU処理→Storage書込→Network送信 |
+| `database_server` | Network受信→Memory確保→Storage読取→CPU処理→Storage書込→Network送信 |
+| `storage_server` | Network受信→Storage読取→Storage書込→Network送信 |
+| `network_switch` | Network受信→Network送信 |
+| `router` | Network受信→CPU処理→Network送信 |
+| `gpu_worker` | Memory確保→Storage読取→GPU処理→CPU処理→Storage書込 |
+
+ExecutorはWorkに存在するRequirementだけを上表の順序で処理します。同じNetwork
+Requirementを受信と送信に、同じStorage Requirementの読取量と書込量をそれぞれの
+Device操作に対応させます。要求量がない操作は実行しません。
 
 役割変更はNodeの役割とExecutor、および保存用BuildRequestを同時に更新します。
 
 ## ライフサイクル
 
-Nodeは生成時にワーカースレッドを開始します。投入されたWorkは
-queued→running→completedまたはfailedへ進みます。`wait_all()`はキューと実行中集合が
-空になるまで待機し、`stop()`後は新規Workを拒否して既存キューを処理後に終了します。
+Nodeは生成時にワーカースレッドを開始します。Nodeが受け付けた1回の実行試行では、Workは
+queued→running→completedまたはfailedへ進み、その試行の終端状態から別の状態へは
+遷移しません。Device処理が失敗した場合は残りの処理を行わずfailedになります。同じ
+`WorkInfo`を再投入した場合の再試行や状態の再利用はこの契約の対象外です。再試行する
+呼出し側は新しい`WorkInfo`を投入します。
+
+Workは投入を受け付けた順にキューへ入り、ワーカーはその順に取り出します。ワーカーが
+1つなら実行開始順もFIFOになります。複数ワーカーでは完了順を保証しません。
+
+`wait_all()`はキューと実行中集合の両方が空になったときだけ戻ります。`stop()`は呼出し前に
+受け付けたキュー内および実行中のWorkを処理し終えてから同期的に戻ります。複数回呼び出しても
+同じ停止状態を保ちます。`stop()`が戻った後の新規Work投入は、キュー、実行中集合、成功数、
+失敗数を変更せず拒否します。

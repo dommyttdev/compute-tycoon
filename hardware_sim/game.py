@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import count
 from pathlib import Path
 from threading import RLock
@@ -8,7 +8,6 @@ from hardware_sim.assembly import NodeAssemblyConfig, NodeBuilder
 from hardware_sim.catalog import DEFAULT_PARTS_CATALOG, PartsCatalog
 from hardware_sim.errors import SaveDataError
 from hardware_sim.events import EventLog
-from hardware_sim.executors import executor_for_role
 from hardware_sim.monitor import HardwareMonitor
 from hardware_sim.networking import (
     InterfaceAddress,
@@ -274,23 +273,15 @@ class ComputeTycoonGame:
 
     def set_node_role(self, node_id: str, role: NodeRole | str):
         with self._state_lock:
-            node = self._node(node_id)
             role = NodeRole(role)
-            node.role = role
-            node.executor = executor_for_role(role)
+            node = self._node(node_id)
             request = self._build_requests[node_id]
-            self._build_requests[node_id] = BuildRequest(
-                node_id=request.node_id,
-                role=role,
-                name=request.name,
-                motherboard=request.motherboard,
-                processors=request.processors,
-                memory_modules=request.memory_modules,
-                storage_devices=request.storage_devices,
-                gpus=request.gpus,
-                network_interfaces=request.network_interfaces,
-                workers=request.workers,
-            )
+            replacement = replace(request, role=role)
+
+            if not node.set_role(role):
+                return node
+
+            self._build_requests[node_id] = replacement
             self.event_log.record(node.id, f"Node role set to {role.value}")
             self._mark_changed()
             return node

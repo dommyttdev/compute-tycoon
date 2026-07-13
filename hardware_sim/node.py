@@ -10,6 +10,7 @@ from hardware_sim.devices import (
     Processor,
     StorageDevice,
 )
+from hardware_sim.executors import executor_for_role
 from hardware_sim.snapshots import HardwareSnapshot, NodeSnapshot
 from hardware_sim.work import WorkInfo
 
@@ -67,9 +68,9 @@ class Node:
 
         self.id = id
         self.name = name
-        self.role = role
+        self._role = NodeRole(role)
         self.devices = devices
-        self.executor = executor
+        self._executor = executor
         self.event_log = event_log
 
         self._work_pool = deque()
@@ -99,6 +100,11 @@ class Node:
                 except BaseException:
                     pass
             raise
+
+    @property
+    def role(self):
+        with self._condition:
+            return self._role
 
     @property
     def cpu(self):
@@ -139,6 +145,22 @@ class Node:
         with self._condition:
             return bool(self._current_works) or bool(self._work_pool)
 
+    def set_role(self, role: NodeRole | str) -> bool:
+        normalized_role = NodeRole(role)
+
+        with self._condition:
+            if normalized_role is self._role:
+                return False
+            if self._is_stopped:
+                raise RuntimeError("Cannot change role of a stopped node")
+            if self._current_works or self._work_pool:
+                raise RuntimeError("Cannot change role while node is busy")
+
+            executor = executor_for_role(normalized_role)
+            self._role = normalized_role
+            self._executor = executor
+            return True
+
     def is_working(self, work_info: WorkInfo):
         with self._condition:
             return work_info in self._current_works or work_info in self._work_pool
@@ -153,6 +175,7 @@ class Node:
 
     def snapshot(self):
         with self._condition:
+            role = self._role
             queued_works = len(self._work_pool)
             running_works = len(self._current_works)
             completed_works = len(self._worked)
@@ -161,7 +184,7 @@ class Node:
         return NodeSnapshot(
             id=self.id,
             name=self.name,
-            role=self.role,
+            role=role,
             hardware=HardwareSnapshot(
                 cpu=self.cpu.snapshot(),
                 memory=self.memory.snapshot(),
@@ -202,10 +225,11 @@ class Node:
 
                 work_info = self._work_pool.popleft()
                 self._current_works.add(work_info)
+                executor = self._executor
 
             succeeded = False
             try:
-                self.executor.execute(work_info, self)
+                executor.execute(work_info, self)
                 succeeded = True
             except Exception as error:
                 self.log(f"Failed: node={self.id}, id={work_info.id}, reason={error}")

@@ -57,5 +57,5 @@ include = [
     "hardware.py",
 ]
 show_missing = true
-fail_under = 40.0
+fail_under = 74.0
 precision = 1

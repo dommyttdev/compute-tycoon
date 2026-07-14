@@ -117,6 +117,24 @@ def test_address_and_route_changes_replace_values_without_mutating_source(
     assert str(rerouted.routes_for("source")[0].gateway) == "192.0.2.2"
 
 
+def test_add_route_rejects_unknown_interface_without_state_change(
+    nodes: dict[str, Node],
+) -> None:
+    topology = NetworkTopology(nodes)
+
+    with pytest.raises(ValueError):
+        topology.add_route(
+            RouteEntry.create(
+                "source",
+                "198.51.100.0/24",
+                "192.0.2.1",
+                "lan99",
+            )
+        )
+
+    assert topology.routes == ()
+
+
 def _direct_topology(nodes: dict[str, Node]) -> NetworkTopology:
     topology = NetworkTopology(nodes)
     for a, b in (
@@ -142,6 +160,20 @@ def test_resolve_finds_direct_path_without_mutating_topology(
 
     assert resolution.hops == ("source", "switch", "target")
     assert resolution.describe() == "source -> switch -> target"
+    assert (topology.cables, topology.addresses, topology.routes) == state
+
+
+def test_resolve_rejects_target_without_ip_without_mutation(
+    nodes: dict[str, Node],
+) -> None:
+    topology = NetworkTopology(nodes).add_address(
+        InterfaceAddress.create(_port("source:lan0"), "192.0.2.10/24")
+    )
+    state = (topology.cables, topology.addresses, topology.routes)
+
+    with pytest.raises(ValueError, match="target has no IP address"):
+        topology.resolve("source", "target")
+
     assert (topology.cables, topology.addresses, topology.routes) == state
 
 
@@ -213,6 +245,27 @@ def test_unknown_gateway_and_no_route_fail_without_mutating_topology(
     with pytest.raises(ValueError, match="Unknown gateway"):
         routed.resolve("source", "target")
     assert (routed.cables, routed.addresses, routed.routes) == state
+
+
+def test_resolve_rejects_known_gateway_outside_source_subnet_without_mutation(
+    nodes: dict[str, Node],
+) -> None:
+    topology = NetworkTopology(nodes)
+    for port, cidr in (
+        ("source:lan0", "192.0.2.10/24"),
+        ("router-a:lan0", "203.0.113.1/24"),
+        ("target:lan0", "198.51.100.10/24"),
+    ):
+        topology = topology.add_address(InterfaceAddress.create(_port(port), cidr))
+    topology = topology.add_route(
+        RouteEntry.create("source", "198.51.100.0/24", "203.0.113.1")
+    )
+    state = (topology.cables, topology.addresses, topology.routes)
+
+    with pytest.raises(ValueError, match="not reachable"):
+        topology.resolve("source", "target")
+
+    assert (topology.cables, topology.addresses, topology.routes) == state
 
 
 def test_routing_loop_fails_without_mutating_topology(nodes: dict[str, Node]) -> None:

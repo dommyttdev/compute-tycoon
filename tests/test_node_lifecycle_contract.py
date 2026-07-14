@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 
 import pytest
 
@@ -40,12 +40,13 @@ def _work(work_id: int, **requirements: object) -> WorkInfo:
 
 def _devices(
     *,
+    cores: int = 1,
     clock_frequency_hz: int = 1,
     cpu_sink=lambda _message: None,
 ) -> NodeDevices:
     return NodeDevices(
         cpu=Processor(
-            cores=1,
+            cores=cores,
             clock_frequency_hz=clock_frequency_hz,
             sink=cpu_sink,
         ),
@@ -545,6 +546,51 @@ def test_wait_for_failed_work_returns_immutable_structured_failure() -> None:
         node.stop()
 
 
+def test_wait_for_returns_while_unrelated_work_remains_running() -> None:
+    unrelated_started = Event()
+    release_unrelated = Event()
+
+    def hold_unrelated_processing(message: str) -> None:
+        if "id=1," in message:
+            unrelated_started.set()
+            assert release_unrelated.wait(timeout=2)
+
+    node = Node(
+        "node-1",
+        "Node 1",
+        NodeRole.APPLICATION_SERVER,
+        _devices(
+            cores=2,
+            clock_frequency_hz=1_000_000_000,
+            cpu_sink=hold_unrelated_processing,
+        ),
+        ApplicationServerExecutor(),
+        workers=2,
+    )
+    unrelated = _work(1, cpu=CpuRequirement(1))
+    target = _work(2, cpu=CpuRequirement(1))
+    results: list[NodeWorkResult] = []
+    waiter = Thread(target=lambda: results.append(node.wait_for(target)))
+    try:
+        node.put(unrelated)
+        assert unrelated_started.wait(timeout=1)
+        node.put(target)
+        waiter.start()
+
+        waiter.join(timeout=1)
+
+        assert not waiter.is_alive()
+        assert results[0].status == "completed"
+        assert node.is_working(unrelated)
+    finally:
+        release_unrelated.set()
+        if waiter.ident is not None:
+            waiter.join(timeout=1)
+        node.stop()
+
+    assert not waiter.is_alive()
+
+
 def test_stopped_node_rejects_new_work_without_changing_state() -> None:
     node = Node(
         "node-1",
@@ -569,11 +615,19 @@ def test_stopped_node_rejects_new_work_without_changing_state() -> None:
     assert not node.is_failed(rejected_work)
 
 
-def test_application_executor_releases_memory_when_cpu_fails() -> None:
-    def fail_processing(_message: str) -> None:
-        raise RuntimeError("processor failed")
+def test_failed_work_releases_temporary_capacity_for_next_work() -> None:
+    processing_attempts = 0
 
-    devices = _devices(cpu_sink=fail_processing)
+    def fail_first_processing(_message: str) -> None:
+        nonlocal processing_attempts
+        processing_attempts += 1
+        if processing_attempts == 1:
+            raise RuntimeError("processor failed")
+
+    devices = _devices(
+        clock_frequency_hz=1_000_000_000,
+        cpu_sink=fail_first_processing,
+    )
     node = Node(
         "node-1",
         "Node 1",
@@ -583,16 +637,28 @@ def test_application_executor_releases_memory_when_cpu_fails() -> None:
         workers=1,
         event_log=EventLog(),
     )
-    work = _work(
+    failed_work = _work(
         1,
         cpu=CpuRequirement(1),
         memory=MemoryRequirement(1),
     )
+    next_work = _work(
+        2,
+        cpu=CpuRequirement(1),
+        memory=MemoryRequirement(1),
+    )
     try:
-        node.put(work)
-        node.wait_all()
+        node.put(failed_work)
+        failed_result = node.wait_for(failed_work)
 
-        assert node.is_failed(work)
+        assert failed_result.status == "failed"
+        assert devices.memory.used == 0
+        assert devices.cpu.snapshot().active_cores == 0
+
+        node.put(next_work)
+        next_result = node.wait_for(next_work)
+
+        assert next_result.status == "completed"
         assert devices.memory.used == 0
         assert devices.cpu.snapshot().active_cores == 0
     finally:

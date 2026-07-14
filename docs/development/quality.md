@@ -23,14 +23,16 @@ python -m venv .venv
 4. `mypy`: 段階的な型検査
 5. `coverage run -m pytest`: Assembly、Inventoryなどの動作契約テストと
    line・branch coverageの計測
-6. `coverage report`: 未実行行を表示し、対象全体のカバレッジが40.0%を
+6. `coverage report`: 未実行行を表示し、対象全体のカバレッジが74.0%を
    下回っていないことを確認
 
 設定は`pyproject.toml`、開発依存は`requirements-dev.txt`が正です。現在のmypy設定は
 動的JSONと一部の実行時objectを許容する移行用baselineです。
 
-カバレッジ対象は`hardware_sim`、`main.py`、`hardware.py`です。40.0%はbranch
-coverage導入時点の回帰検出用baselineであり、テスト追加に合わせて引き上げます。
+カバレッジ対象は`hardware_sim`、`main.py`、`hardware.py`です。74.0%は文書化された
+重要契約のgap分析後に得たline・branch coverageの実測値を整数へ切り下げた回帰検出用
+baselineです。総率だけを上げるテストは追加せず、テスト追加後の実測値に合わせて
+引き上げます。分析結果と除外理由は`test-coverage.md`を参照してください。
 
 ## 変更時の確認観点
 

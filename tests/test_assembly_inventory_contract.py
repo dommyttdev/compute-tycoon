@@ -119,6 +119,39 @@ def test_valid_assembly_registers_node_and_consumes_parts(
     assert game.inventory.part_quantity("gpus", request.gpus[0]) == 0
 
 
+def test_build_node_duplicate_id_does_not_consume_new_parts(
+    game: ComputeTycoonGame,
+) -> None:
+    request = _request()
+    _buy_request_parts(game, request)
+    original_node = game.build_node(request)
+    _buy_request_parts(game, request)
+    inventory_before_rejection = deepcopy(game.inventory.to_dict())
+    topology_before_rejection = (
+        tuple(game.topology.nodes),
+        game.topology.cables,
+        game.topology.addresses,
+        game.topology.routes,
+    )
+    version_before_rejection = game.state_version
+
+    try:
+        with pytest.raises(ValueError, match="already exists"):
+            game.build_node(request)
+
+        assert game.nodes == {request.node_id: original_node}
+        assert (
+            tuple(game.topology.nodes),
+            game.topology.cables,
+            game.topology.addresses,
+            game.topology.routes,
+        ) == topology_before_rejection
+        assert game.inventory.to_dict() == inventory_before_rejection
+        assert game.state_version == version_before_rejection
+    finally:
+        game.stop_all()
+
+
 def test_missing_inventory_does_not_change_game(game: ComputeTycoonGame) -> None:
     request = _request()
     game.buy_part("motherboards", request.motherboard)

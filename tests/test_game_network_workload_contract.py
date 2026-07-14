@@ -690,6 +690,98 @@ def test_failed_gpu_child_skips_post_and_releases_temporary_resources(
     assert gpu.failed_works == 1
 
 
+def test_second_delegation_failure_skips_remaining_child_and_post(
+    game: ComputeTycoonGame,
+) -> None:
+    _place_server(game, "app")
+    _place_server(game, "switch", NodeRole.NETWORK_SWITCH)
+    _build_gpu_worker(game, "gpu")
+    _place_server(game, "storage", NodeRole.DATABASE_SERVER)
+    game.set_node_role("storage", NodeRole.STORAGE_SERVER)
+    for port, cidr in (
+        ("app:lan0", "192.0.2.10/24"),
+        ("gpu:lan0", "192.0.2.20/24"),
+        ("storage:lan0", "192.0.2.30/24"),
+    ):
+        game.add_address(port, cidr)
+    game.buy_cable(CABLE_ID, quantity=3)
+    game.connect("app:lan0", "switch:port1", CABLE_ID)
+    game.connect("gpu:lan0", "switch:port2", CABLE_ID)
+    game.connect("storage:lan0", "switch:port3", CABLE_ID)
+    gpu_memory_capacity = game.nodes["gpu"].snapshot().hardware.gpus[0].memory_capacity
+    app_storage_before = game.nodes["app"].snapshot().hardware.storage.used
+    game.workloads = WorkloadCatalog(
+        [
+            ApplicationWorkloadProfile(
+                kind="second-child-failure",
+                pre=None,
+                delegations=(
+                    ApplicationDelegationProfile(
+                        role="storage_server",
+                        requirements=(
+                            StorageRequirementProfile(
+                                read=(0, 0),
+                                write=(0, 0),
+                            ),
+                        ),
+                    ),
+                    ApplicationDelegationProfile(
+                        role="gpu_worker",
+                        requirements=(
+                            GpuRequirementProfile(
+                                compute=(1, 1),
+                                memory=(
+                                    gpu_memory_capacity + 1,
+                                    gpu_memory_capacity + 1,
+                                ),
+                            ),
+                        ),
+                    ),
+                    ApplicationDelegationProfile(
+                        role="storage_server",
+                        requirements=(
+                            StorageRequirementProfile(
+                                read=(0, 0),
+                                write=(1, 1),
+                            ),
+                        ),
+                    ),
+                ),
+                post=(StorageRequirementProfile(read=(0, 0), write=(1, 1)),),
+            )
+        ]
+    )
+
+    result = game.run_workload("second-child-failure")
+
+    assert result.status == "failed"
+    assert result.failure.code == "delegation_failed"
+    root = result.jobs[0].root
+    assert root.status == "failed"
+    assert root.failure.code == "delegation_failed"
+    assert len(root.children) == 2
+    assert root.children[0].status == "completed"
+    assert root.children[0].node_id == "storage"
+    assert root.children[0].route == ("app", "switch", "storage")
+    assert root.children[1].status == "failed"
+    assert root.children[1].failure.code == "node_execution_failed"
+    assert root.children[1].node_id == "gpu"
+    assert root.children[1].route == ("app", "switch", "gpu")
+
+    app = game.nodes["app"].snapshot().hardware
+    gpu = game.nodes["gpu"].snapshot().hardware
+    storage = game.nodes["storage"].snapshot().hardware
+    assert app.storage.used == app_storage_before
+    assert gpu.completed_works == 0
+    assert gpu.failed_works == 1
+    assert gpu.gpus[0].memory_used == 0
+    assert gpu.gpus[0].active_jobs == 0
+    assert storage.queued_works == 0
+    assert storage.running_works == 0
+    assert storage.completed_works == 1
+    assert storage.failed_works == 0
+
+
 def test_stopped_reachable_gpu_returns_nested_execution_failure_and_skips_post(
     game: ComputeTycoonGame,
 ) -> None:
